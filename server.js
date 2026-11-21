@@ -168,10 +168,7 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  // Ensure watcher is active if onboarded
-  if (merchant.isOnboarded && merchant.gmailUser && merchant.gmailAppPass) {
-    watcherManager.getOrCreate(merchant);
-  }
+  // Real payment status comes only from the authenticated verifier adapter.
 
   setCookie(res, merchant.id);
   res.json({
@@ -221,43 +218,7 @@ app.post('/api/merchant/upload-qr', upload.single('qrImage'), async (req, res) =
 });
 
 // Test Gmail IMAP Connection Live
-app.post('/api/merchant/test-email', async (req, res) => {
-  if (process.env.VERCEL) return res.status(503).json({error:'Gmail verification requires a secure persistent worker'});
-  const { gmailUser, gmailAppPass } = req.body;
-  if (!gmailUser || !gmailAppPass) {
-    return res.status(400).json({ error: 'Gmail address and App Password required' });
-  }
-
-  const client = new ImapFlow({
-    host: 'imap.gmail.com',
-    port: 993,
-    secure: true,
-    auth: {
-      user: gmailUser.trim(),
-      pass: gmailAppPass.replace(/\s+/g, '')
-    },
-    logger: false
-  });
-
-  try {
-    await client.connect();
-    let lock = await client.getMailboxLock('INBOX');
-    const total = client.mailbox.exists;
-    lock.release();
-    await client.logout();
-
-    res.json({
-      success: true,
-      message: 'Connected successfully to Gmail IMAP!',
-      inboxCount: total
-    });
-  } catch (err) {
-    res.status(400).json({
-      success: false,
-      error: 'Gmail authentication failed. Please verify 2-Step Verification is enabled and use a 16-character App Password.'
-    });
-  }
-});
+app.post('/api/merchant/test-email', (req,res) => res.status(403).json({error:'Gmail App Password collection is disabled. Connect a verified bank/PSP source instead.'}));
 
 // Complete Onboarding
 app.post('/api/merchant/complete-onboarding', async (req, res) => {
@@ -267,18 +228,17 @@ app.post('/api/merchant/complete-onboarding', async (req, res) => {
   // Reject a forged merchantId even for an authenticated user.
   if (merchantId !== merchant.id) return res.status(403).json({ error: 'Merchant mismatch' });
 
-  if (process.env.VERCEL && gmailAppPass) return res.status(503).json({error:'Do not submit Gmail App Passwords to serverless. Configure a persistent verifier first.'});
+  if (gmailAppPass) return res.status(403).json({error:'Gmail App Passwords are not accepted by this gateway build'});
   const updated = store.updateMerchant(merchant.id, {
     businessName: businessName || merchant.businessName,
     upiId: upiId || merchant.upiId,
     qrImagePath: qrImagePath || merchant.qrImagePath,
     gmailUser: gmailUser || merchant.gmailUser,
-    gmailAppPass: gmailAppPass ? gmailAppPass.replace(/\s+/g, '') : merchant.gmailAppPass,
+    gmailAppPass: '',
     isOnboarded: true
   });
 
-  // Start or update active watcher
-  if (!process.env.VERCEL && process.env.PAYMENT_VERIFICATION_ENABLED === 'true') watcherManager.getOrCreate(updated);
+  // A verified bank/PSP event will independently confirm actual credits.
 
   res.json({
     success: true,
@@ -390,21 +350,7 @@ app.post('/api/merchant/regenerate-api-key', (req, res) => {
 });
 
 // SSE Stream for Merchant Dashboard
-app.get('/api/merchant/events', (req, res) => {
-  const merchantId = req.query.merchantId || 'merch_default';
-  const merchant = store.getMerchantById(merchantId);
-  if (!merchant) return res.status(404).end();
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
-
-  const watcher = watcherManager.getOrCreate(merchant);
-  if (watcher) {
-    watcher.subscribeMerchant(res);
-  }
-});
+app.get('/api/merchant/events', (req, res) => res.status(204).end());
 
 // Trusted-verifier adapter. NOT a bank feed by itself: the configured
 // external caller must independently confirm a real bank credit.
@@ -508,8 +454,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
     dynamicQrDataUrl: qrDataUrl
   });
 
-  // Ensure watcher is active
-  if (!process.env.VERCEL && process.env.PAYMENT_VERIFICATION_ENABLED === 'true') watcherManager.getOrCreate(merchant);
+  // No mailbox watcher runs on web requests.
 
   res.json({
     success: true,
@@ -573,11 +518,7 @@ app.get('/api/v1/checkout/status/:orderId', async (req, res) => {
   }
 
   // Force quick check via watcher
-  const merchant = store.getMerchantById(order.merchantId);
-  if (merchant && !process.env.VERCEL && process.env.PAYMENT_VERIFICATION_ENABLED === 'true') {
-    const watcher = watcherManager.getOrCreate(merchant);
-    if (watcher) await watcher.syncAndProcess(15);
-  }
+  // Only read confirmed payment status; do not attempt to infer it from email.
 
   const refreshed = store.getOrder(orderId);
   return res.json({
@@ -618,70 +559,10 @@ app.get('/api/v1/checkout/delivery/:orderId', (req, res) => {
 });
 
 // Dedicated SSE Stream for an order checkout
-app.get('/api/v1/checkout/events/:orderId', (req, res) => {
-  const { orderId } = req.params;
-  const order = store.getOrder(orderId);
-  if (!order) return res.status(404).end();
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders();
-
-  const merchant = store.getMerchantById(order.merchantId);
-  if (merchant) {
-    if (!process.env.VERCEL && process.env.PAYMENT_VERIFICATION_ENABLED === 'true') {
-      const watcher = watcherManager.getOrCreate(merchant);
-      if (watcher) watcher.subscribeOrder(orderId, res);
-    }
-  }
-});
+app.get('/api/v1/checkout/events/:orderId', (req, res) => res.status(204).end());
 
 // Manual UTR submission on paywall
-app.post('/api/v1/checkout/verify-utr', async (req, res) => {
-  const { orderId, utr } = req.body;
-  if (!orderId || !utr) {
-    return res.status(400).json({ error: 'Order ID and UTR required' });
-  }
-
-  const order = store.getOrder(orderId);
-  if (!order) return res.status(404).json({ error: 'Order not found' });
-
-  return res.status(403).json({error:'Manual UTR alone is not trusted proof of payment. Await an authenticated bank/PSP event.'});
-  if (!/^\d{12}$/.test(String(utr).trim())) return res.status(400).json({error:'A valid 12-digit UTR is required'});
-  const merchant = store.getMerchantById(order.merchantId);
-  if (!merchant) return res.status(404).json({error:'Merchant not found'});
-  const watcher = watcherManager.getOrCreate(merchant);
-  if (!watcher) return res.status(503).json({ error: 'Verification watcher is not configured' });
-
-  await watcher.syncAndProcess(25);
-
-  const cleanUtr = utr.trim().toLowerCase();
-  const matched = watcher.recentPayments.find(p => {
-    const pUtr = (p.utr || '').toLowerCase();
-    const pTxn = (p.txnId || '').toLowerCase();
-    const pSnippet = (p.snippet || '').toLowerCase();
-    return (pUtr.includes(cleanUtr) || pTxn.includes(cleanUtr) || pSnippet.includes(cleanUtr)) &&
-           Math.abs(p.amount - order.amount) < 0.01 &&
-           !watcher.isPaymentClaimed(p);
-  });
-
-  if (matched) {
-    watcher.executeOrderMatch(order, matched, 'MANUAL_UTR_CONFIRMATION');
-    const updated = store.getOrder(orderId);
-    return res.json({
-      success: true,
-      verified: true,
-      order: publicOrder(updated)
-    });
-  }
-
-  return res.json({
-    success: false,
-    verified: false,
-    message: 'UTR not yet detected in inbox. Please allow a few seconds for the bank email alert.'
-  });
-});
+app.post('/api/v1/checkout/verify-utr', (req,res) => res.status(403).json({error:'A customer-entered UTR does not verify a bank credit. Await an authenticated bank/PSP event.'}));
 
 // Simulation endpoint to test concurrent payments
 app.post('/api/v1/simulate-payment', (req, res) => {
