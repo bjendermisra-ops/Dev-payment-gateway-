@@ -115,6 +115,18 @@ test('merchant session rejects spoofed IDs and disables money before verificatio
     method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ amount: 5 })
   });
   assert.equal(fakeSimulation.res.status, 403);
+  const invalidUpi = await request('/api/merchant/update-upi', {
+    method: 'POST', headers: { cookie, 'content-type':'application/json' },
+    body: JSON.stringify({ upiId: 'not-an-address' })
+  });
+  assert.equal(invalidUpi.res.status, 400);
+  const updatedUpi = await request('/api/merchant/update-upi', {
+    method: 'POST', headers: { cookie, 'content-type':'application/json' },
+    body: JSON.stringify({ upiId: 'myshop@okaxis' })
+  });
+  assert.equal(updatedUpi.res.status, 200);
+  assert.equal(updatedUpi.body.merchant.upiId, 'myshop@okaxis');
+  assert.equal(updatedUpi.body.merchant.isOnboarded, true);
   const blockedPayment = await request('/api/merchant/create-paywall-link', {
     method: 'POST', headers: { cookie, 'content-type': 'application/json' },
     body: JSON.stringify({ amount: 5 })
