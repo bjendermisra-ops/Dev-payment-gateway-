@@ -362,7 +362,7 @@ app.post('/api/internal/verified-payment', async (req, res) => {
   }
   const timestamp = req.headers['x-aurapay-timestamp'];
   const signature = req.headers['x-aurapay-signature'];
-  if (!/^\\d{10,13}$/.test(String(timestamp || '')) || !/^sha256=[a-f0-9]{64}$/.test(String(signature || ''))) {
+  if (!/^\d{10,13}$/.test(String(timestamp || '')) || !/^sha256=[a-f0-9]{64}$/.test(String(signature || ''))) {
     return res.status(401).json({ error: 'Invalid verification signature' });
   }
   const milliseconds = Number(timestamp) < 1e12 ? Number(timestamp) * 1000 : Number(timestamp);
@@ -375,7 +375,7 @@ app.post('/api/internal/verified-payment', async (req, res) => {
   }
   const { orderId, merchantId, amount, utr, transactionId, eventId, status } = req.body || {};
   if (status !== 'CREDIT_CONFIRMED' || !/^PAY-[0-9a-f-]{36}$/.test(String(orderId || '')) ||
-      typeof merchantId !== 'string' || !/^\\d{12}$/.test(String(utr || '')) ||
+      typeof merchantId !== 'string' || !/^\d{12}$/.test(String(utr || '')) ||
       typeof eventId !== 'string' || eventId.length < 8 || eventId.length > 128 ||
       !Number.isFinite(Number(amount))) return res.status(400).json({ error: 'Invalid verified credit event' });
   const order = store.getOrder(orderId);
