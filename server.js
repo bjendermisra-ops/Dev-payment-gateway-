@@ -93,6 +93,7 @@ app.get('/api/health', (req, res) => res.json({
   status: 'online',
   service: 'AuraPay Express Gateway',
   storage: store.mongoReady ? 'mongodb' : (process.env.VERCEL ? 'temporary-demo' : 'local'),
+  paymentReady: !process.env.VERCEL && store.mongoReady && process.env.PAYMENT_VERIFICATION_ENABLED === 'true',
   timestamp: new Date().toISOString()
 }));
 
@@ -200,6 +201,7 @@ app.post('/api/merchant/upload-qr', upload.single('qrImage'), async (req, res) =
 
 // Test Gmail IMAP Connection Live
 app.post('/api/merchant/test-email', async (req, res) => {
+  if (process.env.VERCEL) return res.status(503).json({error:'Gmail verification requires a secure persistent worker'});
   const { gmailUser, gmailAppPass } = req.body;
   if (!gmailUser || !gmailAppPass) {
     return res.status(400).json({ error: 'Gmail address and App Password required' });
@@ -244,6 +246,7 @@ app.post('/api/merchant/complete-onboarding', async (req, res) => {
   // Reject a forged merchantId even for an authenticated user.
   if (merchantId !== merchant.id) return res.status(403).json({ error: 'Merchant mismatch' });
 
+  if (process.env.VERCEL && gmailAppPass) return res.status(503).json({error:'Do not submit Gmail App Passwords to serverless. Configure a persistent verifier first.'});
   const updated = store.updateMerchant(merchant.id, {
     businessName: businessName || merchant.businessName,
     upiId: upiId || merchant.upiId,
@@ -311,7 +314,7 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
   const merchant = store.getMerchantById(merchantId);
   if (!merchant) return res.status(404).json({ error: 'Merchant not found' });
 
-  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
+  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.VERCEL || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
   const numAmount = Number(amount);
   if (isNaN(numAmount) || numAmount <= 0) {
     return res.status(400).json({ error: 'Valid payment amount required' });
@@ -399,7 +402,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
   }
 
   const { amount, customerName, customerEmail, note } = req.body;
-  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
+  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.VERCEL || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
   const numAmount = Number(amount);
   if (isNaN(numAmount) || numAmount <= 0) {
     return res.status(400).json({ error: 'Invalid amount' });
@@ -537,8 +540,9 @@ app.get('/api/v1/checkout/delivery/:orderId', (req, res) => {
     });
   }
 
-  const DRIVE_VIEW_URL = 'https://drive.google.com/file/d/17kwNVuo_KY9XiRi5ohNXdo93CeQr0d3I/view?usp=sharing';
-  const DRIVE_DOWNLOAD_URL = 'https://drive.google.com/uc?export=download&id=17kwNVuo_KY9XiRi5ohNXdo93CeQr0d3I';
+  const DRIVE_VIEW_URL = process.env.DIGITAL_DELIVERY_URL;
+  const DRIVE_DOWNLOAD_URL = process.env.DIGITAL_DOWNLOAD_URL || DRIVE_VIEW_URL;
+  if (!DRIVE_VIEW_URL) return res.status(503).json({error:'Digital delivery is not configured'});
   const targetUrl = req.query.download === '1' ? DRIVE_DOWNLOAD_URL : DRIVE_VIEW_URL;
 
   if (req.xhr || req.headers.accept?.includes('application/json') || req.query.format === 'json') {
