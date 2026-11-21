@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // App State
   let currentMerchant = null;
   let activeOnboardingStep = 1;
-  let uploadedQrPath = '/uploads/default-qr.jpeg';
+  let uploadedQrPath = '';
   let decodedUpiId = '';
   let merchantSse = null;
 
@@ -346,6 +346,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 3. ONBOARDING WIZARD LOGIC
   // ==============================================================
   function setupOnboarding() {
+    const btnSaveUpiFast = document.getElementById('btnSaveUpiFast');
+    if (btnSaveUpiFast) btnSaveUpiFast.addEventListener('click', window.finishOnboarding);
     // Dropzone Click
     qrDropzone.addEventListener('click', () => qrFileInput.click());
     btnSelectQrFile.addEventListener('click', (e) => {
@@ -516,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
       upiId: obUpiId.value.trim() || decodedUpiId,
       qrImagePath: uploadedQrPath,
       gmailUser: obGmailUser.value.trim(),
-      gmailAppPass: obGmailPass.value.trim()
+      gmailAppPass: ''
     };
 
     try {
@@ -538,6 +540,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         window.nextOnboardingSlide(5);
+      } else {
+        showToast(data.error || 'Please enter a valid UPI ID before saving.');
       }
     } catch (e) {
       showToast('Could not complete onboarding.');
@@ -548,6 +552,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // 4. MERCHANT DASHBOARD LOGIC
   // ==============================================================
   function setupDashboard() {
+    const formDashUpi = document.getElementById('formDashUpi');
+    const dashUpiInput = document.getElementById('dashUpiInput');
+    const dashUpiStatus = document.getElementById('dashUpiStatus');
+    const btnSaveDashUpi = document.getElementById('btnSaveDashUpi');
+    if (formDashUpi) formDashUpi.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const upiId = dashUpiInput.value.trim();
+      if (!/^[A-Za-z0-9._-]{2,}@[A-Za-z0-9.-]{2,}$/.test(upiId)) {
+        dashUpiStatus.textContent = 'Please enter a valid UPI ID like yourname@bank.';
+        return;
+      }
+      btnSaveDashUpi.disabled = true;
+      try {
+        const res = await fetch('/api/merchant/update-upi', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({upiId})});
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'UPI ID could not be saved');
+        currentMerchant = data.merchant;
+        dashUpiStatus.textContent = 'UPI ID saved! New checkout links will use ' + upiId + ' and the customer amount.';
+        showToast('UPI ID saved. Now create a payment link.');
+        loadDashboardData();
+      } catch(err) {
+        dashUpiStatus.textContent = err.message || 'Could not save UPI ID';
+        showToast(dashUpiStatus.textContent);
+      } finally { btnSaveDashUpi.disabled = false; }
+    });
     btnRefreshOrders.addEventListener('click', loadDashboardData);
 
     const tableSearchInput = document.getElementById('tableSearchInput');
@@ -619,7 +648,11 @@ document.addEventListener('DOMContentLoaded', () => {
           btnOpenGeneratedUrl.href = fullUrl;
           paywallLinkResult.classList.remove('hidden');
           loadDashboardData();
-          showToast('Payment link generated!');
+          const previewNotice = document.getElementById('previewCheckoutNotice');
+          if (previewNotice) previewNotice.classList.toggle('hidden', !data.previewOnly);
+          showToast(data.previewOnly ? 'QR preview ready. Do not make real payments yet.' : 'Payment link generated!');
+        } else {
+          showToast(data.error || 'Please save your UPI ID first.');
         }
       } catch (err) {
         showToast('Error creating payment link');
@@ -695,6 +728,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = data.merchant;
         dashBusinessTitle.textContent = m.businessName;
         dashApiKeyDisplay.textContent = m.apiKey;
+        const dashUpiInput = document.getElementById('dashUpiInput');
+        if (dashUpiInput && document.activeElement !== dashUpiInput) dashUpiInput.value = m.upiId || '';
+        const dashUpiStatus = document.getElementById('dashUpiStatus');
+        if (dashUpiStatus && !m.upiId) dashUpiStatus.textContent = 'UPI ID is not configured. Save your own UPI ID above.';
         metricVolume.textContent = `₹${parseFloat(data.metrics.totalVolume).toFixed(2)}`;
         metricPaidCount.textContent = data.metrics.paidCount;
         metricQueueLoad.textContent = `${data.metrics.pendingCount} active concurrent queues`;
