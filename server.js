@@ -103,6 +103,20 @@ function publicMerchant(merchant) {
   return safe;
 }
 
+function publicOrder(order) {
+  if (!order) return null;
+  return {
+    orderId: order.orderId, amount: order.amount, note: order.note,
+    customerName: order.customerName, status: order.status,
+    dynamicUpiUrl: order.dynamicUpiUrl, dynamicQrDataUrl: order.dynamicQrDataUrl,
+    verifiedAt: order.verifiedAt,
+    paymentDetails: order.status === 'PAID' && order.paymentDetails ? {
+      utr: order.paymentDetails.utr,
+      txnId: order.paymentDetails.txnId
+    } : null
+  };
+}
+
 // Initialize Watcher for default merchant on start
 const defaultMerchant = null;
 if (defaultMerchant && defaultMerchant.gmailUser && defaultMerchant.gmailAppPass) {
@@ -316,7 +330,7 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
 
   if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.VERCEL || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
   const numAmount = Number(amount);
-  if (isNaN(numAmount) || numAmount <= 0) {
+  if (!Number.isFinite(numAmount) || numAmount < 1 || numAmount > 100000 || Math.round(numAmount * 100) / 100 !== numAmount) {
     return res.status(400).json({ error: 'Valid payment amount required' });
   }
 
@@ -331,7 +345,7 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
   }
 
   // Pre-generate dynamic QR data with isolated exact amount and order ID
-  const orderId = `PAY-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+  const orderId = `PAY-${require('crypto').randomUUID()}`;
   const { upiUri, qrDataUrl } = await qrHelper.generateDynamicQrDataUrl({
     upiId: merchant.upiId,
     payeeName: merchant.businessName,
@@ -404,7 +418,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
   const { amount, customerName, customerEmail, note } = req.body;
   if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.VERCEL || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
   const numAmount = Number(amount);
-  if (isNaN(numAmount) || numAmount <= 0) {
+  if (!Number.isFinite(numAmount) || numAmount < 1 || numAmount > 100000 || Math.round(numAmount * 100) / 100 !== numAmount) {
     return res.status(400).json({ error: 'Invalid amount' });
   }
 
@@ -418,7 +432,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
     finalAmount = parseFloat((numAmount + offset * 0.01).toFixed(2));
   }
 
-  const orderId = `PAY-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+  const orderId = `PAY-${require('crypto').randomUUID()}`;
   const { upiUri, qrDataUrl } = await qrHelper.generateDynamicQrDataUrl({
     upiId: merchant.upiId,
     payeeName: merchant.businessName,
@@ -479,17 +493,7 @@ app.get('/api/v1/checkout/:orderId', async (req, res) => {
 
   res.json({
     success: true,
-    order: {
-      orderId: order.orderId,
-      amount: order.amount,
-      customerName: order.customerName,
-      note: order.note,
-      status: order.status,
-      dynamicUpiUrl: order.dynamicUpiUrl,
-      dynamicQrDataUrl: order.dynamicQrDataUrl,
-      verifiedAt: order.verifiedAt,
-      paymentDetails: order.paymentDetails
-    },
+    order: publicOrder(order),
     merchant: {
       businessName: merchant ? merchant.businessName : 'Merchant Payee',
       upiId: merchant ? merchant.upiId : '8789601387@fam',
@@ -508,7 +512,7 @@ app.get('/api/v1/checkout/status/:orderId', async (req, res) => {
     return res.json({
       success: true,
       verified: true,
-      order
+      order: publicOrder(order)
     });
   }
 
@@ -523,7 +527,7 @@ app.get('/api/v1/checkout/status/:orderId', async (req, res) => {
   return res.json({
     success: true,
     verified: refreshed.status === 'PAID',
-    order: refreshed
+    order: publicOrder(refreshed)
   });
 });
 
@@ -612,7 +616,7 @@ app.post('/api/v1/checkout/verify-utr', async (req, res) => {
     return res.json({
       success: true,
       verified: true,
-      order: updated
+      order: publicOrder(updated)
     });
   }
 
