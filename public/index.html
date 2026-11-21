@@ -547,24 +547,24 @@
             <div class="slide-card">
               <div class="slide-badge">STEP 4 OF 5 • BANK VERIFICATION</div>
               <h2 class="slide-title">Set Up Trusted Payment Verification</h2>
-              <p class="slide-sub">AuraPay securely connects to your Gmail IMAP via Google's sanctioned App Passwords.</p>
+              <p class="slide-sub">For real payments, connect an approved bank/PSP verifier with signed server-to-server callbacks. This test site never asks for Gmail passwords.</p>
 
               <div class="app-pass-guide">
                 <div class="guide-col">
                   <span class="guide-step-tag">1</span>
-                  <span>Go to <strong>myaccount.google.com/security</strong></span>
+                  <span>Create a <strong>MongoDB Atlas development database</strong></span>
                 </div>
                 <div class="guide-col">
                   <span class="guide-step-tag">2</span>
-                  <span>Verify <strong>2-Step Verification</strong> is ON</span>
+                  <span>Configure <strong>MONGODB_URI</strong> securely in Vercel</span>
                 </div>
                 <div class="guide-col">
                   <span class="guide-step-tag">3</span>
-                  <span>Search <strong>"App passwords"</strong></span>
+                  <span>Connect an <strong>authorized bank/PSP credit confirmation</strong></span>
                 </div>
                 <div class="guide-col">
                   <span class="guide-step-tag">4</span>
-                  <span>Name it <strong>AuraPay</strong> &amp; copy the 16 letters</span>
+                  <span>Configure your <strong>verified payment webhook</strong> after testing</span>
                 </div>
               </div>
 
@@ -591,7 +591,7 @@
               <div class="slide-footer">
                 <button type="button" class="btn-slide-back" onclick="window.nextOnboardingSlide(3)">Back</button>
                 <button type="button" class="btn-slide-next" id="btnCompleteOnboarding" onclick="window.finishOnboarding()">
-                  <span>Finish &amp; Get API Key</span>
+                  <span>Save Merchant Profile</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="9 18 15 12 9 6"/>
                   </svg>
