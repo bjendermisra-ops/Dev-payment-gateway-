@@ -497,8 +497,8 @@ app.get('/api/v1/checkout/:orderId', async (req, res) => {
     order: publicOrder(order),
     merchant: {
       businessName: merchant ? merchant.businessName : 'Merchant Payee',
-      upiId: merchant ? merchant.upiId : '8789601387@fam',
-      qrImagePath: merchant ? merchant.qrImagePath : '/uploads/default-qr.jpeg'
+      upiId: merchant ? merchant.upiId : '',
+      qrImagePath: merchant ? merchant.qrImagePath : ''
     }
   });
 });
