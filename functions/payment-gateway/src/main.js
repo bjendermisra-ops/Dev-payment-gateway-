@@ -136,8 +136,8 @@ module.exports = async ({ req, res, log, error }) => {
 
     const orderId = `PAY-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
     const safeNote = (note || `Pay ${orderId}`).replace(/[^a-zA-Z0-9 ]/g, '').trim().slice(0, 24);
-    const cleanVpa = (merchant.upiId || '8789601387@fam').trim();
-    const safeName = (merchant.businessName || 'Monu Kumar').replace(/&/g, 'and').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const cleanVpa = (merchant.upiId || '').trim();
+    const safeName = (merchant.businessName || 'Your Business').replace(/&/g, 'and').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
     const cleanName = encodeURIComponent(safeName);
     const cleanAmount = Number(finalAmount).toFixed(2);
     const txnRef = encodeURIComponent(orderId);
@@ -211,8 +211,8 @@ module.exports = async ({ req, res, log, error }) => {
 
     const orderId = `PAY-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
     const safeNote = (note || `Pay ${orderId}`).replace(/[^a-zA-Z0-9 ]/g, '').trim().slice(0, 24);
-    const cleanVpa = (merchant.upiId || '8789601387@fam').trim();
-    const safeName = (merchant.businessName || 'Monu Kumar').replace(/&/g, 'and').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const cleanVpa = (merchant.upiId || '').trim();
+    const safeName = (merchant.businessName || 'Your Business').replace(/&/g, 'and').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
     const cleanName = encodeURIComponent(safeName);
     const cleanAmount = Number(finalAmount).toFixed(2);
     const txnRef = encodeURIComponent(orderId);
@@ -318,7 +318,7 @@ module.exports = async ({ req, res, log, error }) => {
       order,
       merchant: {
         businessName: merchant ? merchant.businessName : 'Apex Cloud & Payments',
-        upiId: merchant ? merchant.upiId : '8789601387@fam',
+        upiId: merchant ? merchant.upiId : 'yourname@upi',
         qrImagePath: merchant ? merchant.qrImagePath : '/uploads/default-qr.jpeg'
       }
     }, 200, corsHeaders);
@@ -388,7 +388,7 @@ module.exports = async ({ req, res, log, error }) => {
       },
       merchant: {
         businessName: merchant ? merchant.businessName : 'Apex Cloud & Payments',
-        upiId: merchant ? merchant.upiId : '8789601387@fam',
+        upiId: merchant ? merchant.upiId : 'yourname@upi',
         qrImagePath: merchant ? merchant.qrImagePath : '/uploads/default-qr.jpeg'
       }
     }, 200, corsHeaders);
