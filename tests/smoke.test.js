@@ -89,3 +89,37 @@ test('unknown API and unauthorized checkout fail correctly', async () => {
   });
   assert.equal(unauthorized.res.status, 401);
 });
+
+test('merchant session rejects spoofed IDs and disables money before verification', async () => {
+  const anon = await request('/api/merchant/dashboard', { headers: { 'x-merchant-id': 'merch_default' } });
+  assert.equal(anon.res.status, 401);
+  const email = 'session-' + Date.now() + '@example.invalid';
+  const registered = await request('/api/auth/register', {
+    method: 'POST', headers: { 'content-type':'application/json' },
+    body: JSON.stringify({ name:'Merchant A', businessName:'Demo Store', email, password:'secure-testing-password' })
+  });
+  assert.equal(registered.res.status, 200);
+  const cookie = (registered.res.headers.get('set-cookie') || '').split(';')[0];
+  assert.ok(cookie.startsWith('aurapay_session='));
+  const unauthMe = await request('/api/auth/me');
+  assert.equal(unauthMe.res.status, 401);
+  const own = await request('/api/auth/me', { headers: { cookie } });
+  assert.equal(own.res.status, 200);
+  assert.equal(own.body.merchant.email, email);
+  const dashboard = await request('/api/merchant/dashboard', {
+    headers: { cookie, 'x-merchant-id': 'merch_default' }
+  });
+  assert.equal(dashboard.res.status, 200);
+  assert.equal(dashboard.body.merchant.email, email);
+  const fakeSimulation = await request('/api/v1/simulate-payment', {
+    method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: JSON.stringify({ amount: 5 })
+  });
+  assert.equal(fakeSimulation.res.status, 403);
+  const blockedPayment = await request('/api/merchant/create-paywall-link', {
+    method: 'POST', headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ amount: 5 })
+  });
+  assert.equal(blockedPayment.res.status, 503);
+  const logout = await request('/api/auth/logout', { method:'POST', headers:{ cookie } });
+  assert.equal(logout.res.status, 200);
+});
