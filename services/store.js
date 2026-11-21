@@ -163,7 +163,7 @@ class Store {
   }
 
   createOrder(data) {
-    const orderId = `PAY-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+    const orderId = data.orderId || `PAY-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
     const order = {
       orderId,
       merchantId: data.merchantId,
