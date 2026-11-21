@@ -48,6 +48,26 @@ app.use((req,res,next) => {
 // Merchant routes are protected by the signed HttpOnly session cookie.
 // Caller-controlled merchant IDs must never grant access to another merchant.
 const merchantSession = requireMerchant(store);
+// Load durable state before authentication, and persist every changed record
+// before replying to a mutating API request.
+app.use('/api', async (req,res,next) => {
+  try {
+    await store.ready;
+    if (process.env.MONGODB_URI && !store.mongoReady) return res.status(503).json({error:'Database unavailable'});
+    if (store.mongoReady) await store.loadFromMongo();
+    if (req.method !== 'GET') {
+      const sendJson = res.json.bind(res);
+      res.json = data => {
+        store.flushWrites().then(() => sendJson(data)).catch(err => {
+          console.error('[Database] Could not persist request:', err.message);
+          if (!res.headersSent) { res.statusCode = 503; sendJson({error:'Database write failed'}); }
+        });
+        return res;
+      };
+    }
+    next();
+  } catch(err) { console.error('[Database]',err.message); return res.status(503).json({error:'Database unavailable'}); }
+});
 app.use('/api/merchant', merchantSession, (req,res,next) => {
   req.headers['x-merchant-id'] = req.merchant.id;
   next();
@@ -234,7 +254,7 @@ app.post('/api/merchant/complete-onboarding', async (req, res) => {
   });
 
   // Start or update active watcher
-  watcherManager.getOrCreate(updated);
+  if (!process.env.VERCEL && process.env.PAYMENT_VERIFICATION_ENABLED === 'true') watcherManager.getOrCreate(updated);
 
   res.json({
     success: true,
@@ -291,7 +311,7 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
   const merchant = store.getMerchantById(merchantId);
   if (!merchant) return res.status(404).json({ error: 'Merchant not found' });
 
-  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI) return res.status(503).json({error:'Configure your verified UPI ID and persistent database before creating payment links.'});
+  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
   const numAmount = Number(amount);
   if (isNaN(numAmount) || numAmount <= 0) {
     return res.status(400).json({ error: 'Valid payment amount required' });
@@ -318,6 +338,7 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
   });
 
   const order = store.createOrder({
+    orderId,
     merchantId,
     amount: finalAmount,
     customerName,
@@ -378,7 +399,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
   }
 
   const { amount, customerName, customerEmail, note } = req.body;
-  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI) return res.status(503).json({error:'Merchant must configure a UPI ID and persistent database before accepting payment.'});
+  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
   const numAmount = Number(amount);
   if (isNaN(numAmount) || numAmount <= 0) {
     return res.status(400).json({ error: 'Invalid amount' });
@@ -404,6 +425,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
   });
 
   const order = store.createOrder({
+    orderId,
     merchantId: merchant.id,
     amount: finalAmount,
     customerName,
@@ -414,7 +436,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
   });
 
   // Ensure watcher is active
-  watcherManager.getOrCreate(merchant);
+  if (!process.env.VERCEL && process.env.PAYMENT_VERIFICATION_ENABLED === 'true') watcherManager.getOrCreate(merchant);
 
   res.json({
     success: true,
@@ -489,11 +511,9 @@ app.get('/api/v1/checkout/status/:orderId', async (req, res) => {
 
   // Force quick check via watcher
   const merchant = store.getMerchantById(order.merchantId);
-  if (merchant) {
+  if (merchant && !process.env.VERCEL && process.env.PAYMENT_VERIFICATION_ENABLED === 'true') {
     const watcher = watcherManager.getOrCreate(merchant);
-    if (watcher) {
-      await watcher.syncAndProcess(15);
-    }
+    if (watcher) await watcher.syncAndProcess(15);
   }
 
   const refreshed = store.getOrder(orderId);
@@ -546,9 +566,9 @@ app.get('/api/v1/checkout/events/:orderId', (req, res) => {
 
   const merchant = store.getMerchantById(order.merchantId);
   if (merchant) {
-    const watcher = watcherManager.getOrCreate(merchant);
-    if (watcher) {
-      watcher.subscribeOrder(orderId, res);
+    if (!process.env.VERCEL && process.env.PAYMENT_VERIFICATION_ENABLED === 'true') {
+      const watcher = watcherManager.getOrCreate(merchant);
+      if (watcher) watcher.subscribeOrder(orderId, res);
     }
   }
 });
@@ -563,6 +583,7 @@ app.post('/api/v1/checkout/verify-utr', async (req, res) => {
   const order = store.getOrder(orderId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
+  if (process.env.VERCEL || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Trusted bank verification worker is not available'});
   if (!/^\d{12}$/.test(String(utr).trim())) return res.status(400).json({error:'A valid 12-digit UTR is required'});
   const merchant = store.getMerchantById(order.merchantId);
   if (!merchant) return res.status(404).json({error:'Merchant not found'});
