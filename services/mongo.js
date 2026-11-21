@@ -34,6 +34,8 @@ const OrderSchema = new mongoose.Schema({
     utr: String,
     txnId: String,
     rawText: String,
+    eventId: String,
+    verificationMethod: String,
     timestamp: Date,
     eventId: String,
     verificationMethod: String
