@@ -197,9 +197,16 @@ app.post('/api/merchant/upload-qr', upload.single('qrImage'), async (req, res) =
   }
 
   const filePath = req.file.path;
+  // On serverless, /tmp is ephemeral. Persist small QR images with the merchant
+  // record instead of saving a URL that breaks on the next function instance.
+  if (process.env.VERCEL && req.file.size > 256 * 1024) {
+    fs.unlink(filePath, () => {});
+    return res.status(413).json({error:'Use a QR image under 256 KB on this demo'});
+  }
   const webPath = process.env.VERCEL
-    ? `/api/merchant/qr/${path.basename(filePath)}`
+    ? `data:${req.file.mimetype};base64,${fs.readFileSync(filePath).toString('base64')}`
     : `/uploads/${path.basename(filePath)}`;
+  if (process.env.VERCEL) fs.unlink(filePath, () => {});
 
   // Automatically decode QR code to extract UPI ID
   const decoded = await qrHelper.decodeQrImage(filePath);
