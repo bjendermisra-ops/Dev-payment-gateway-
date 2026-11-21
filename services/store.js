@@ -3,7 +3,11 @@ const path = require('path');
 const crypto = require('crypto');
 const { MerchantModel, OrderModel, connectMongo, getIsConnected } = require('./mongo');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'store.json');
+const os = require('os');
+// Vercel functions have a read-only deployment filesystem. Use /tmp for demo
+// state; configure MongoDB for durable, multi-instance production storage.
+const DB_PATH = process.env.AURAPAY_STORE_PATH ||
+  (process.env.VERCEL ? path.join(os.tmpdir(), 'aurapay-store.json') : path.join(__dirname, '..', 'data', 'store.json'));
 
 class Store {
   constructor() {
