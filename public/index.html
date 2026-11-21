@@ -406,7 +406,8 @@
               <div class="form-group">
                 <label class="form-label" for="obUpiId">Settlement UPI ID</label>
                 <input type="text" id="obUpiId" class="form-control font-mono" value="" placeholder="e.g. yourname@upi">
-                <span class="form-hint">Funds will be deposited directly to this UPI ID.</span>
+                <span class="form-hint">Enter your own UPI ID (PhonePe, GPay, Paytm or bank VPA). A QR is generated automatically for each checkout amount. Never use another person’s UPI ID.</span>
+              <button type="button" class="btn-slide-next" id="btnSaveUpiFast" style="margin-top:12px;max-width:100%;width:100%;">Save My UPI ID &amp; Continue (No QR Upload Needed)</button>
               </div>
 
               <div class="slide-footer">
@@ -425,8 +426,8 @@
           <div class="carousel-slide" id="slide2">
             <div class="slide-card">
               <div class="slide-badge">STEP 2 OF 5</div>
-              <h2 class="slide-title">Upload FamPay / UPI QR Code</h2>
-              <p class="slide-sub">Our built-in computer vision decodes your QR and enables dynamic amount embedding.</p>
+              <h2 class="slide-title">Optional: Import Existing UPI QR</h2>
+              <p class="slide-sub">You can skip this step. Your UPI ID alone is enough to automatically generate a fresh QR for every amount.</p>
 
               <div class="upload-dropzone" id="qrDropzone">
                 <input type="file" id="qrFileInput" accept="image/*" class="file-hidden">
@@ -656,11 +657,25 @@
                 <line x1="12" y1="5" x2="12" y2="19"/>
                 <line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              <span>Create Payment Link</span>
+              <span>Create Amount QR &amp; Payment Link</span>
             </button>
             <button type="button" class="btn-dash-secondary" id="btnDashLogout">Log out</button>
           </div>
         </div>
+
+        <section class="dash-panel upi-settings-panel" aria-label="Merchant UPI settings">
+          <div class="upi-settings-info">
+            <div class="sub-panel-title">Your UPI ID • Dynamic QR</div>
+            <p class="panel-sub">Use your own PhonePe, Google Pay, Paytm or bank UPI address. Every new checkout QR includes this ID and its exact amount. Updating your ID affects future checkouts only.</p>
+            <p class="upi-preview-warning">UPI app opening is available for testing. Automatic bank verification is not yet connected—do not make real payments until enabled.</p>
+          </div>
+          <form id="formDashUpi" class="upi-settings-form">
+            <label for="dashUpiInput" class="form-label">Settlement UPI ID</label>
+            <input id="dashUpiInput" class="form-control font-mono" placeholder="yourname@upi" maxlength="128" autocomplete="off" spellcheck="false" required>
+            <button type="submit" class="btn-dash-primary" id="btnSaveDashUpi">Save UPI ID</button>
+            <p class="panel-sub" id="dashUpiStatus" role="status">Your UPI ID is stored privately in your merchant profile.</p>
+          </form>
+        </section>
 
         <!-- Metric Stat Cards -->
         <div class="metrics-grid">
@@ -805,7 +820,8 @@
       </form>
 
       <div class="paywall-result hidden" id="paywallLinkResult">
-        <div class="result-title">Hosted Paywall Link Ready:</div>
+        <div class="result-title">Hosted Checkout Link Ready:</div>
+        <p id="previewCheckoutNotice" class="upi-preview-warning hidden">Preview only: this QR and UPI app link can initiate a real transfer. Do not send money: bank confirmation is NOT connected, so this order will stay PENDING.</p>
         <div class="link-copy-row">
           <input type="text" id="generatedPaywallUrl" class="form-control font-mono" readonly>
           <button type="button" class="btn-dash-primary" id="btnCopyGeneratedUrl">Copy</button>
