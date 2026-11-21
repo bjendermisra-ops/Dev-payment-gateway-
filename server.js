@@ -9,6 +9,7 @@ const { ImapFlow } = require('imapflow');
 const store = require('./services/store');
 const qrHelper = require('./services/qrHelper');
 const watcherManager = require('./services/concurrencyWatcher');
+const { hashPassword, validPassword, setCookie, clearCookie, requireMerchant } = require('./services/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,6 +39,26 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(uploadDir));
+app.use((req,res,next) => {
+  res.setHeader('X-Content-Type-Options','nosniff');
+  res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options','DENY');
+  next();
+});
+// Merchant routes are protected by the signed HttpOnly session cookie.
+// Caller-controlled merchant IDs must never grant access to another merchant.
+const merchantSession = requireMerchant(store);
+app.use('/api/merchant', merchantSession, (req,res,next) => {
+  req.headers['x-merchant-id'] = req.merchant.id;
+  next();
+});
+app.use('/api/auth/me', merchantSession);
+app.use('/api/v1/simulate-payment', merchantSession, (req,res,next) => {
+  if (process.env.ENABLE_SIMULATIONS !== 'true') return res.status(403).json({error:'Payment simulation is disabled'});
+  req.body.merchantId = req.merchant.id;
+  next();
+});
+
 
 // Temporary uploaded QR assets remain accessible on the same function instance.
 // Use durable object storage before accepting production uploads.
@@ -62,7 +83,7 @@ function publicMerchant(merchant) {
 }
 
 // Initialize Watcher for default merchant on start
-const defaultMerchant = store.getMerchantById('merch_default');
+const defaultMerchant = null;
 if (defaultMerchant && defaultMerchant.gmailUser && defaultMerchant.gmailAppPass) {
   watcherManager.getOrCreate(defaultMerchant);
 }
@@ -74,8 +95,11 @@ if (defaultMerchant && defaultMerchant.gmailUser && defaultMerchant.gmailAppPass
 // Register new merchant
 app.post('/api/auth/register', (req, res) => {
   const { name, email, password, businessName } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' });
+  if (!email || typeof password !== 'string' || password.length < 12 || password.length > 128) {
+    return res.status(400).json({ error: 'Valid email and a password of 12-128 characters are required' });
+  }
+  if (process.env.VERCEL && !process.env.MONGODB_URI) {
+    return res.status(503).json({error: 'Merchant registration requires permanent database storage. Configure MONGODB_URI.'});
   }
 
   const existing = store.getMerchantByEmail(email);
@@ -86,9 +110,10 @@ app.post('/api/auth/register', (req, res) => {
   const merchant = store.createMerchant({
     name,
     email,
-    password,
+    password: hashPassword(password),
     businessName
   });
+  setCookie(res, merchant.id);
 
   res.json({
     success: true,
@@ -104,7 +129,7 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const merchant = store.getMerchantByEmail(email);
-  if (!merchant || merchant.password !== password) {
+  if (!merchant || !validPassword(password, merchant.password)) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
@@ -113,20 +138,17 @@ app.post('/api/auth/login', (req, res) => {
     watcherManager.getOrCreate(merchant);
   }
 
+  setCookie(res, merchant.id);
   res.json({
     success: true,
     merchant: publicMerchant(merchant)
   });
 });
+app.post('/api/auth/logout', (req,res) => { clearCookie(res); res.json({success:true}); });
 
 // Get current merchant profile
 app.get('/api/auth/me', (req, res) => {
-  const merchantId = req.headers['x-merchant-id'] || 'merch_default';
-  const merchant = store.getMerchantById(merchantId);
-  if (!merchant) {
-    return res.status(404).json({ error: 'Merchant not found' });
-  }
-  res.json({ success: true, merchant: publicMerchant(merchant) });
+  res.json({ success: true, merchant: publicMerchant(req.merchant) });
 });
 
 // ==============================================================
@@ -150,8 +172,8 @@ app.post('/api/merchant/upload-qr', upload.single('qrImage'), async (req, res) =
   res.json({
     success: true,
     qrImagePath: webPath,
-    detectedUpiId: decoded.upiId || '8789601387@fam',
-    detectedPayeeName: decoded.payeeName || 'FamPay Merchant',
+    detectedUpiId: decoded.upiId || '',
+    detectedPayeeName: decoded.payeeName || '',
     rawQrData: decoded.raw || ''
   });
 });
@@ -198,12 +220,11 @@ app.post('/api/merchant/test-email', async (req, res) => {
 app.post('/api/merchant/complete-onboarding', async (req, res) => {
   const { merchantId, businessName, upiId, qrImagePath, gmailUser, gmailAppPass } = req.body;
   
-  const merchant = store.getMerchantById(merchantId);
-  if (!merchant) {
-    return res.status(404).json({ error: 'Merchant not found' });
-  }
+  const merchant = req.merchant;
+  // Reject a forged merchantId even for an authenticated user.
+  if (merchantId !== merchant.id) return res.status(403).json({ error: 'Merchant mismatch' });
 
-  const updated = store.updateMerchant(merchantId, {
+  const updated = store.updateMerchant(merchant.id, {
     businessName: businessName || merchant.businessName,
     upiId: upiId || merchant.upiId,
     qrImagePath: qrImagePath || merchant.qrImagePath,
@@ -270,7 +291,8 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
   const merchant = store.getMerchantById(merchantId);
   if (!merchant) return res.status(404).json({ error: 'Merchant not found' });
 
-  const numAmount = parseFloat(amount || 1.00);
+  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI) return res.status(503).json({error:'Configure your verified UPI ID and persistent database before creating payment links.'});
+  const numAmount = Number(amount);
   if (isNaN(numAmount) || numAmount <= 0) {
     return res.status(400).json({ error: 'Valid payment amount required' });
   }
@@ -356,7 +378,8 @@ app.post('/api/v1/checkout/create', async (req, res) => {
   }
 
   const { amount, customerName, customerEmail, note } = req.body;
-  const numAmount = parseFloat(amount || 199.00);
+  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI) return res.status(503).json({error:'Merchant must configure a UPI ID and persistent database before accepting payment.'});
+  const numAmount = Number(amount);
   if (isNaN(numAmount) || numAmount <= 0) {
     return res.status(400).json({ error: 'Invalid amount' });
   }
@@ -540,9 +563,11 @@ app.post('/api/v1/checkout/verify-utr', async (req, res) => {
   const order = store.getOrder(orderId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
+  if (!/^\d{12}$/.test(String(utr).trim())) return res.status(400).json({error:'A valid 12-digit UTR is required'});
   const merchant = store.getMerchantById(order.merchantId);
+  if (!merchant) return res.status(404).json({error:'Merchant not found'});
   const watcher = watcherManager.getOrCreate(merchant);
-  if (!watcher) return res.status(500).json({ error: 'Watcher not available' });
+  if (!watcher) return res.status(503).json({ error: 'Verification watcher is not configured' });
 
   await watcher.syncAndProcess(25);
 
@@ -575,7 +600,7 @@ app.post('/api/v1/checkout/verify-utr', async (req, res) => {
 
 // Simulation endpoint to test concurrent payments
 app.post('/api/v1/simulate-payment', (req, res) => {
-  const { merchantId = 'merch_default', amount = 5, payerName = 'Concurrent Tester', utr } = req.body;
+  const { merchantId = req.merchant.id, amount = 5, payerName = 'Concurrent Tester', utr } = req.body;
   const merchant = store.getMerchantById(merchantId);
   if (!merchant) return res.status(404).json({ error: 'Merchant not found' });
 
@@ -596,7 +621,8 @@ app.post('/api/v1/simulate-payment', (req, res) => {
 
   res.json({
     success: true,
-    simulatedPayment
+    simulatedPayment,
+    warning: 'TEST DATA ONLY - not proof of any bank transaction'
   });
 });
 
