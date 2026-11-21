@@ -14,7 +14,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Multer Storage Configuration for QR uploads
-const uploadDir = path.join(__dirname, 'uploads');
+const uploadDir = process.env.VERCEL
+  ? path.join(require('os').tmpdir(), 'aurapay-uploads')
+  : path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -24,7 +26,11 @@ const storage = multer.diskStorage({
     cb(null, `qr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}${ext}`);
   }
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype))
+});
 
 // Middleware
 app.use(cors());
@@ -32,6 +38,28 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(uploadDir));
+
+// Temporary uploaded QR assets remain accessible on the same function instance.
+// Use durable object storage before accepting production uploads.
+app.get('/api/merchant/qr/:filename', (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const filePath = path.join(uploadDir, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'QR image not found or upload expired' });
+  return res.sendFile(filePath);
+});
+
+app.get('/api/health', (req, res) => res.json({
+  status: 'online',
+  service: 'AuraPay Express Gateway',
+  storage: store.mongoReady ? 'mongodb' : (process.env.VERCEL ? 'temporary-demo' : 'local'),
+  timestamp: new Date().toISOString()
+}));
+
+function publicMerchant(merchant) {
+  if (!merchant) return null;
+  const { password, gmailAppPass, ...safe } = merchant;
+  return safe;
+}
 
 // Initialize Watcher for default merchant on start
 const defaultMerchant = store.getMerchantById('merch_default');
@@ -64,7 +92,7 @@ app.post('/api/auth/register', (req, res) => {
 
   res.json({
     success: true,
-    merchant
+    merchant: publicMerchant(merchant)
   });
 });
 
@@ -87,7 +115,7 @@ app.post('/api/auth/login', (req, res) => {
 
   res.json({
     success: true,
-    merchant
+    merchant: publicMerchant(merchant)
   });
 });
 
@@ -98,7 +126,7 @@ app.get('/api/auth/me', (req, res) => {
   if (!merchant) {
     return res.status(404).json({ error: 'Merchant not found' });
   }
-  res.json({ success: true, merchant });
+  res.json({ success: true, merchant: publicMerchant(merchant) });
 });
 
 // ==============================================================
@@ -112,7 +140,9 @@ app.post('/api/merchant/upload-qr', upload.single('qrImage'), async (req, res) =
   }
 
   const filePath = req.file.path;
-  const webPath = `/uploads/${path.basename(filePath)}`;
+  const webPath = process.env.VERCEL
+    ? `/api/merchant/qr/${path.basename(filePath)}`
+    : `/uploads/${path.basename(filePath)}`;
 
   // Automatically decode QR code to extract UPI ID
   const decoded = await qrHelper.decodeQrImage(filePath);
@@ -187,7 +217,7 @@ app.post('/api/merchant/complete-onboarding', async (req, res) => {
 
   res.json({
     success: true,
-    merchant: updated
+    merchant: publicMerchant(updated)
   });
 });
 
@@ -577,6 +607,9 @@ app.post('/api/v1/simulate-payment', (req, res) => {
 app.get(['/pay/:orderId', '/checkout/:orderId', '/test/:orderId', '/test'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'paywall.html'));
 });
+
+// Unknown API paths must not silently return the dashboard HTML.
+app.use('/api', (req, res) => res.status(404).json({ error: 'Unknown API endpoint' }));
 
 // Fallback to Main Dashboard / Landing SPA
 app.use((req, res) => {
