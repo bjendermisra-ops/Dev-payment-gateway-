@@ -1,3 +1,5 @@
+> **IMPORTANT — CURRENT STATUS (November 2026): TESTING BUILD ONLY.** This open-source project is **not yet safe for real money**. The original README below describes intended capabilities, not verified production readiness. Live UPI checkout is disabled on Vercel. Set up MongoDB, a persistent backend, and a trusted bank/PSP payment verifier before accepting funds. See [deployment and website integration guide](DEPLOYMENT_AND_INTEGRATION.md).
+
 <div align="center">
 
 # ⚡ AuraPay • Automated UPI Payment Gateway
@@ -11,7 +13,7 @@
 [![Appwrite](https://img.shields.io/badge/Appwrite-Cloud-FD366E?style=for-the-badge&logo=appwrite&logoColor=white)](https://appwrite.io/)
 [![Vercel](https://img.shields.io/badge/Vercel-Deployment-black?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/)
 
-[Live Demo](https://public-zeta-cyan-79.vercel.app) • [Architecture](#-architecture--lifecycle) • [Quick Start](#-quick-start) • [API Reference](#-api-reference) • [Deployment](#-cloud-deployment)
+[Live Demo](https://dev-payment-gateway.vercel.app) • [Architecture](#-architecture--lifecycle) • [Quick Start](#-quick-start) • [API Reference](#-api-reference) • [Deployment](#-cloud-deployment)
 
 ---
 
@@ -136,8 +138,8 @@ When User 1 pays ₹1.00, only User 1 receives verification. User 2's screen rem
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/monu564100/automated-payment-gateway.git
-cd automated-payment-gateway
+git clone https://github.com/bjendermisra-ops/Dev-payment-gateway-.git
+cd Dev-payment-gateway-
 ```
 
 ### 2. Install Dependencies
