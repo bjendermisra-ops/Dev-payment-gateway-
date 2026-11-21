@@ -16,9 +16,9 @@ class Store {
       orders: {}
     };
     this.mongoReady = false;
+    this.pendingWrites = [];
     this.loadLocal();
-    this.ensureDefaultMerchant();
-    this.initMongo();
+    this.ready = this.initMongo();
   }
 
   loadLocal() {
@@ -95,27 +95,18 @@ class Store {
     }
   }
 
-  ensureDefaultMerchant() {
-    if (Object.keys(this.data.merchants).length === 0) {
-      const defaultId = 'merch_default';
-      const defaultApiKey = 'aura_live_9f82b7c41a58e390d4e';
-      const defaultMerchant = {
-        id: defaultId,
-        name: process.env.PAYEE_NAME || 'Monu Kumar',
-        email: process.env.GMAIL_USER || 'huntkum@gmail.com',
-        password: 'password123',
-        businessName: process.env.BUSINESS_NAME || 'Apex Cloud & Payments',
-        upiId: process.env.UPI_ID || '8789601387@fam',
-        qrImagePath: '/uploads/default-qr.jpeg',
-        gmailUser: process.env.GMAIL_USER || 'huntkum@gmail.com',
-        gmailAppPass: process.env.GMAIL_APP_PASS || '',
-        apiKey: defaultApiKey,
-        isOnboarded: true,
-        createdAt: new Date().toISOString()
-      };
-      this.data.merchants[defaultId] = defaultMerchant;
-      this.saveLocal();
-    }
+
+  trackWrite(query) {
+    if (!this.mongoReady) return;
+    const promise = Promise.resolve(query).then(result => result);
+    // Convert failures to values to avoid unhandled rejections before flushWrites.
+    this.pendingWrites.push(promise.then(() => ({ok:true}), err => ({ok:false,error:err.message})));
+  }
+
+  async flushWrites() {
+    const writes = this.pendingWrites.splice(0);
+    const results = await Promise.all(writes);
+    if (results.some(x => !x.ok)) throw new Error('Database persistence failed');
   }
 
   createMerchant(data) {
@@ -127,8 +118,8 @@ class Store {
       email: data.email.toLowerCase().trim(),
       password: data.password,
       businessName: data.businessName || `${data.name}'s Store`,
-      upiId: data.upiId || '8789601387@fam',
-      qrImagePath: data.qrImagePath || '/uploads/default-qr.jpeg',
+      upiId: data.upiId || '',
+      qrImagePath: data.qrImagePath || '',
       gmailUser: data.gmailUser || data.email,
       gmailAppPass: data.gmailAppPass || '',
       apiKey,
@@ -139,9 +130,7 @@ class Store {
     this.saveLocal();
 
     // Persist to MongoDB
-    MerchantModel.findOneAndUpdate({ id }, merchant, { upsert: true }).catch(err => {
-      console.error('[Store] Mongo Merchant insert error:', err.message);
-    });
+    this.trackWrite(MerchantModel.findOneAndUpdate({ id }, merchant, { upsert: true }));
 
     return merchant;
   }
@@ -168,9 +157,7 @@ class Store {
     this.saveLocal();
 
     // Persist to MongoDB
-    MerchantModel.findOneAndUpdate({ id }, { $set: updates }).catch(err => {
-      console.error('[Store] Mongo Merchant update error:', err.message);
-    });
+    this.trackWrite(MerchantModel.findOneAndUpdate({ id }, { $set: updates }));
 
     return m;
   }
@@ -195,9 +182,7 @@ class Store {
     this.saveLocal();
 
     // Persist to MongoDB
-    OrderModel.findOneAndUpdate({ orderId }, order, { upsert: true }).catch(err => {
-      console.error('[Store] Mongo Order insert error:', err.message);
-    });
+    this.trackWrite(OrderModel.findOneAndUpdate({ orderId }, order, { upsert: true }));
 
     return order;
   }
@@ -213,9 +198,7 @@ class Store {
     this.saveLocal();
 
     // Persist to MongoDB
-    OrderModel.findOneAndUpdate({ orderId }, { $set: updates }).catch(err => {
-      console.error('[Store] Mongo Order update error:', err.message);
-    });
+    this.trackWrite(OrderModel.findOneAndUpdate({ orderId }, { $set: updates }));
 
     return order;
   }
