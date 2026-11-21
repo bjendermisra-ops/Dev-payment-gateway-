@@ -34,12 +34,15 @@ const OrderSchema = new mongoose.Schema({
     utr: String,
     txnId: String,
     rawText: String,
-    timestamp: Date
+    timestamp: Date,
+    eventId: String,
+    verificationMethod: String
   }
 }, { timestamps: true });
 
 // Prevent a single bank UTR from settling multiple orders.
 OrderSchema.index({ 'paymentDetails.utr': 1 }, { unique: true, partialFilterExpression: { 'paymentDetails.utr': { $type: 'string' } } });
+OrderSchema.index({ 'paymentDetails.eventId': 1 }, { unique: true, partialFilterExpression: { 'paymentDetails.eventId': { $type: 'string' } } });
 
 const MerchantModel = mongoose.model('Merchant', MerchantSchema);
 const OrderModel = mongoose.model('Order', OrderSchema);
