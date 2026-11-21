@@ -7,14 +7,17 @@ const jsQR = require('jsqr');
  */
 function buildUpiUri({ upiId, payeeName, amount, note, orderId }) {
   // 1. Payee VPA / UPI ID: Crucial - do NOT percent-encode '@' into '%40'!
-  const cleanVpa = (upiId || '8789601387@fam').trim();
+  const cleanVpa = String(upiId || '').trim();
+  if (!/^[A-Za-z0-9._-]{2,}@[A-Za-z0-9.-]{2,}$/.test(cleanVpa)) throw new Error('Configure a valid merchant UPI ID before generating QR codes');
 
   // 2. Payee Merchant Name: Format and sanitize
-  const safeName = (payeeName || 'Monu Kumar').replace(/&/g, 'and').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  const safeName = (payeeName || 'Merchant').replace(/&/g, 'and').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
   const cleanName = encodeURIComponent(safeName);
 
   // 3. Amount: Fixed to 2 decimal places
-  const cleanAmount = Number(amount || 1.00).toFixed(2);
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value < 1 || value > 100000 || Math.round(value * 100) / 100 !== value) throw new Error('Amount must be between ₹1 and ₹100000 with no more than two decimal places');
+  const cleanAmount = value.toFixed(2);
 
   // 4. Transaction Reference & Note
   const orderCode = orderId || `PAY-${Date.now().toString().slice(-6)}`;
@@ -75,8 +78,8 @@ async function decodeQrImage(filePath) {
       return {
         success: true,
         raw,
-        upiId: upiId || '8789601387@fam',
-        payeeName: payeeName || 'FamPay Merchant'
+        upiId: upiId || '',
+        payeeName: payeeName || ''
       };
     }
 
