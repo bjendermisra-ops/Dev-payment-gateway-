@@ -107,6 +107,7 @@ function publicOrder(order) {
   if (!order) return null;
   return {
     orderId: order.orderId, amount: order.amount, note: order.note,
+    previewOnly: Boolean(order.previewOnly),
     customerName: order.customerName, status: order.status,
     dynamicUpiUrl: order.dynamicUpiUrl, dynamicQrDataUrl: order.dynamicQrDataUrl,
     verifiedAt: order.verifiedAt,
@@ -229,9 +230,13 @@ app.post('/api/merchant/complete-onboarding', async (req, res) => {
   if (merchantId !== merchant.id) return res.status(403).json({ error: 'Merchant mismatch' });
 
   if (gmailAppPass) return res.status(403).json({error:'Gmail App Passwords are not accepted by this gateway build'});
+  const chosenUpi = String(upiId || merchant.upiId || '').trim();
+  if (!/^[A-Za-z0-9._-]{2,}@[A-Za-z0-9.-]{2,}$/.test(chosenUpi) || chosenUpi.length > 128) {
+    return res.status(400).json({error:'Enter a valid UPI ID such as yourname@bank before saving.'});
+  }
   const updated = store.updateMerchant(merchant.id, {
     businessName: businessName || merchant.businessName,
-    upiId: upiId || merchant.upiId,
+    upiId: chosenUpi,
     qrImagePath: qrImagePath || merchant.qrImagePath,
     gmailUser: gmailUser || merchant.gmailUser,
     gmailAppPass: '',
@@ -244,6 +249,16 @@ app.post('/api/merchant/complete-onboarding', async (req, res) => {
     success: true,
     merchant: publicMerchant(updated)
   });
+});
+
+// Allow a signed-in merchant to update their own UPI ID without uploading a QR image.
+app.post('/api/merchant/update-upi', (req, res) => {
+  const upiId = String(req.body?.upiId || '').trim();
+  if (!/^[A-Za-z0-9._-]{2,}@[A-Za-z0-9.-]{2,}$/.test(upiId) || upiId.length > 128) {
+    return res.status(400).json({error:'Enter a valid UPI ID, e.g. yourname@bank.'});
+  }
+  const updated = store.updateMerchant(req.merchant.id, { upiId, isOnboarded: true });
+  return res.json({ success:true, merchant:publicMerchant(updated) });
 });
 
 // ==============================================================
@@ -295,7 +310,10 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
   const merchant = store.getMerchantById(merchantId);
   if (!merchant) return res.status(404).json({ error: 'Merchant not found' });
 
-  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || !process.env.VERIFIER_WEBHOOK_SECRET || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
+  if (!merchant.upiId || !merchant.isOnboarded) return res.status(400).json({error:'Save your UPI ID in Merchant Settings before creating a checkout.'});
+  if (!store.mongoReady) return res.status(503).json({error:'Permanent database is required to generate checkout links.'});
+  // Preview checkout can show a QR and open UPI apps, but MUST remain PENDING.
+  const previewOnly = !process.env.VERIFIER_WEBHOOK_SECRET || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true';
   const numAmount = Number(amount);
   if (!Number.isFinite(numAmount) || numAmount < 1 || numAmount > 100000 || Math.round(numAmount * 100) / 100 !== numAmount) {
     return res.status(400).json({ error: 'Valid payment amount required' });
@@ -306,7 +324,7 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
   const used = new Set(pending.map(o => (o.amount || 0).toFixed(2)));
   let finalAmount = numAmount;
   let offset = 0;
-  while (used.has(finalAmount.toFixed(2)) && offset < 50) {
+  while (!previewOnly && used.has(finalAmount.toFixed(2)) && offset < 50) {
     offset++;
     finalAmount = parseFloat((numAmount + offset * 0.01).toFixed(2));
   }
@@ -325,6 +343,9 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
     orderId,
     merchantId,
     amount: finalAmount,
+    previewOnly,
+    upiIdSnapshot: merchant.upiId,
+    payeeNameSnapshot: merchant.businessName,
     customerName,
     customerEmail,
     note: note || `Payment #${orderId}`,
@@ -334,7 +355,8 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
 
   res.json({
     success: true,
-    order,
+    order: publicOrder(order),
+    previewOnly,
     paywallUrl: `/pay/${order.orderId}`
   });
 });
@@ -381,6 +403,7 @@ app.post('/api/internal/verified-payment', async (req, res) => {
   const order = store.getOrder(orderId);
   if (!order || order.merchantId !== merchantId) return res.status(404).json({ error: 'Order not found' });
   if (Math.abs(order.amount - Number(amount)) > 0.001) return res.status(409).json({ error: 'Credit amount does not match order' });
+  if (order.previewOnly) return res.status(409).json({error:'Preview orders cannot be settled by the live verifier.'});
   if (order.status === 'PAID') {
     if (order.paymentDetails?.eventId === eventId && order.paymentDetails?.utr === utr)
       return res.json({ success: true, alreadyProcessed: true, orderId, status: 'PAID' });
@@ -418,7 +441,10 @@ app.post('/api/v1/checkout/create', async (req, res) => {
   }
 
   const { amount, customerName, customerEmail, note } = req.body;
-  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || !process.env.VERIFIER_WEBHOOK_SECRET || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
+  if (!merchant.upiId || !merchant.isOnboarded) return res.status(400).json({error:'Save your UPI ID in Merchant Settings before creating a checkout.'});
+  if (!store.mongoReady) return res.status(503).json({error:'Permanent database is required to generate checkout links.'});
+  // Preview checkout can show a QR and open UPI apps, but MUST remain PENDING.
+  const previewOnly = !process.env.VERIFIER_WEBHOOK_SECRET || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true';
   const numAmount = Number(amount);
   if (!Number.isFinite(numAmount) || numAmount < 1 || numAmount > 100000 || Math.round(numAmount * 100) / 100 !== numAmount) {
     return res.status(400).json({ error: 'Invalid amount' });
@@ -429,7 +455,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
   const used = new Set(pending.map(o => (o.amount || 0).toFixed(2)));
   let finalAmount = numAmount;
   let offset = 0;
-  while (used.has(finalAmount.toFixed(2)) && offset < 50) {
+  while (!previewOnly && used.has(finalAmount.toFixed(2)) && offset < 50) {
     offset++;
     finalAmount = parseFloat((numAmount + offset * 0.01).toFixed(2));
   }
@@ -447,6 +473,9 @@ app.post('/api/v1/checkout/create', async (req, res) => {
     orderId,
     merchantId: merchant.id,
     amount: finalAmount,
+    previewOnly,
+    upiIdSnapshot: merchant.upiId,
+    payeeNameSnapshot: merchant.businessName,
     customerName,
     customerEmail,
     note: note || `Order #${orderId}`,
@@ -462,6 +491,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
     amount: order.amount,
     currency: 'INR',
     status: order.status,
+    previewOnly,
     checkoutUrl: `${req.protocol}://${req.get('host')}/pay/${order.orderId}`,
     dynamicUpiUrl: upiUri,
     dynamicQrDataUrl: qrDataUrl
@@ -496,8 +526,8 @@ app.get('/api/v1/checkout/:orderId', async (req, res) => {
     success: true,
     order: publicOrder(order),
     merchant: {
-      businessName: merchant ? merchant.businessName : 'Merchant Payee',
-      upiId: merchant ? merchant.upiId : '',
+      businessName: order.payeeNameSnapshot || (merchant ? merchant.businessName : 'Merchant Payee'),
+      upiId: order.upiIdSnapshot || (merchant ? merchant.upiId : ''),
       qrImagePath: merchant ? merchant.qrImagePath : ''
     }
   });
