@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
       dynamicQrImg.src = o.dynamicQrDataUrl;
     }
     
-    upiIdDisplay.textContent = m.upiId || '8789601387@fam';
+    upiIdDisplay.textContent = m.upiId || '';
 
     // Show PhonePe intent specifically on test route (/test/new or ₹1 test payments)
     const btnPhonePe = document.getElementById('btnPhonePe');
@@ -195,8 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const amtMatch = rawUri.match(/am=([^&]+)/);
       const noteMatch = rawUri.match(/tn=([^&]+)/);
 
-      const cleanVpa = vpaMatch ? vpaMatch[1] : '8789601387@fam';
-      const cleanName = nameMatch ? nameMatch[1] : 'Monu%20Kumar';
+      const cleanVpa = vpaMatch ? vpaMatch[1] : '';
+      const cleanName = nameMatch ? nameMatch[1] : 'Your%20Business';
       const cleanAmt = amtMatch ? amtMatch[1] : Number(order.amount || 1.00).toFixed(2);
       const cleanNote = noteMatch ? noteMatch[1] : 'Test%20Payment';
 
