@@ -1044,3 +1044,24 @@ body {
   .intent-grid .intent-card { min-width: 0; }
   .upi-address { word-break: break-all; }
 }
+
+/* Explicit direct UPI app intent guidance and original app-scheme fallback. */
+.upi-intent-help {
+  margin-top: 12px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 13px;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.upi-intent-help b, .upi-intent-help strong { color: #0f172a; }
+.upi-original-link { margin-top: 8px; }
+.upi-original-link a { color: #4338ca; font-weight: 700; text-decoration: underline; }
+.upi-original-link a:focus-visible { outline: 3px solid #4f46e5; outline-offset: 3px; border-radius: 4px; }
+.upi-intent-status { display: block; color: #9a3412; font-weight: 600; }
+.upi-intent-status:not(:empty) { margin-top: 8px; }
+@media (max-width: 620px) {
+  .upi-intent-help { font-size: 12px; padding: 11px 12px; }
+}
