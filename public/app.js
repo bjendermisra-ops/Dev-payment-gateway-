@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const phoneNotif = document.getElementById('heroPhoneNotif');
     const radarBox = document.getElementById('heroRadarBox');
 
-    showToast('Simulating customer scanning and paying ₹500...');
+    showToast('Visual-only animation: no money is being transferred.');
     radarTitle.textContent = 'Incoming payment alert detected...';
     radarSub.textContent = 'Parsing bank IMAP stream...';
 
@@ -192,8 +192,8 @@ document.addEventListener('DOMContentLoaded', () => {
         phoneNotif.style.transform = 'translateY(0) scale(1.04)';
         phoneNotif.style.borderColor = '#10B981';
       }
-      if (radarTitle) radarTitle.textContent = '✓ Payment Verified in 1.2s';
-      if (radarSub) radarSub.textContent = 'Order #PAY-892104 settled directly into your FamPay account.';
+      if (radarTitle) radarTitle.textContent = '✓ Visual demo complete — not a real payment';
+      if (radarSub) radarSub.textContent = 'No transaction was made or verified.';
       if (radarBox) {
         radarBox.style.background = '#ECFDF5';
         radarBox.style.borderColor = '#A7F3D0';
@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
         confetti({ particleCount: 75, spread: 65, origin: { y: 0.65 } });
       }
 
-      showToast('Payment verified successfully!');
+      showToast('Animation demo finished (not a payment).');
     }, 1100);
 
     setTimeout(() => {
@@ -299,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function handleAuthSuccess(merchant) {
     currentMerchant = merchant;
-    localStorage.setItem('aurapay_merchant', JSON.stringify(merchant));
+    // Server session cookie is used instead of storing merchant data in localStorage.
     updateNavState();
 
     if (!merchant.isOnboarded) {
@@ -529,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (data.success && data.merchant) {
         currentMerchant = data.merchant;
-        localStorage.setItem('aurapay_merchant', JSON.stringify(data.merchant));
+        // Server session cookie is used instead of storing merchant data in localStorage.
         obApiKeyDisplay.textContent = data.merchant.apiKey;
 
         // Launch celebratory confetti
