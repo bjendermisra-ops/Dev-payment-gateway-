@@ -35,7 +35,7 @@ const upload = multer({
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ verify: (req, res, bytes) => { req.rawBody = Buffer.from(bytes); } }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(uploadDir));
@@ -74,7 +74,7 @@ app.use('/api/merchant', merchantSession, (req,res,next) => {
 });
 app.use('/api/auth/me', merchantSession);
 app.use('/api/v1/simulate-payment', merchantSession, (req,res,next) => {
-  if (process.env.ENABLE_SIMULATIONS !== 'true') return res.status(403).json({error:'Payment simulation is disabled'});
+  if (process.env.ENABLE_SIMULATIONS !== 'true' || process.env.PAYMENT_VERIFICATION_ENABLED === 'true') return res.status(403).json({error:'Payment simulation is disabled'});
   req.body.merchantId = req.merchant.id;
   next();
 });
@@ -93,7 +93,7 @@ app.get('/api/health', (req, res) => res.json({
   status: 'online',
   service: 'AuraPay Express Gateway',
   storage: store.mongoReady ? 'mongodb' : (process.env.VERCEL ? 'temporary-demo' : 'local'),
-  paymentReady: !process.env.VERCEL && store.mongoReady && process.env.PAYMENT_VERIFICATION_ENABLED === 'true',
+  paymentReady: store.mongoReady && Boolean(process.env.VERIFIER_WEBHOOK_SECRET) && process.env.PAYMENT_VERIFICATION_ENABLED === 'true',
   timestamp: new Date().toISOString()
 }));
 
@@ -335,7 +335,7 @@ app.post('/api/merchant/create-paywall-link', async (req, res) => {
   const merchant = store.getMerchantById(merchantId);
   if (!merchant) return res.status(404).json({ error: 'Merchant not found' });
 
-  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.VERCEL || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
+  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || !process.env.VERIFIER_WEBHOOK_SECRET || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
   const numAmount = Number(amount);
   if (!Number.isFinite(numAmount) || numAmount < 1 || numAmount > 100000 || Math.round(numAmount * 100) / 100 !== numAmount) {
     return res.status(400).json({ error: 'Valid payment amount required' });
@@ -406,6 +406,55 @@ app.get('/api/merchant/events', (req, res) => {
   }
 });
 
+// Trusted-verifier adapter. NOT a bank feed by itself: the configured
+// external caller must independently confirm a real bank credit.
+app.post('/api/internal/verified-payment', async (req, res) => {
+  const crypto = require('crypto');
+  const secret = process.env.VERIFIER_WEBHOOK_SECRET;
+  if (!store.mongoReady || !secret || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') {
+    return res.status(503).json({ error: 'Trusted verifier not configured' });
+  }
+  const timestamp = req.headers['x-aurapay-timestamp'];
+  const signature = req.headers['x-aurapay-signature'];
+  if (!/^\\d{10,13}$/.test(String(timestamp || '')) || !/^sha256=[a-f0-9]{64}$/.test(String(signature || ''))) {
+    return res.status(401).json({ error: 'Invalid verification signature' });
+  }
+  const milliseconds = Number(timestamp) < 1e12 ? Number(timestamp) * 1000 : Number(timestamp);
+  if (Math.abs(Date.now() - milliseconds) > 5 * 60 * 1000) return res.status(401).json({ error: 'Expired verifier timestamp' });
+  const digest = 'sha256=' + crypto.createHmac('sha256', secret).update(String(timestamp) + '.').update(req.rawBody || Buffer.alloc(0)).digest('hex');
+  const supplied = Buffer.from(signature);
+  const expected = Buffer.from(digest);
+  if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
+    return res.status(401).json({ error: 'Invalid verification signature' });
+  }
+  const { orderId, merchantId, amount, utr, transactionId, eventId, status } = req.body || {};
+  if (status !== 'CREDIT_CONFIRMED' || !/^PAY-[0-9a-f-]{36}$/.test(String(orderId || '')) ||
+      typeof merchantId !== 'string' || !/^\\d{12}$/.test(String(utr || '')) ||
+      typeof eventId !== 'string' || eventId.length < 8 || eventId.length > 128 ||
+      !Number.isFinite(Number(amount))) return res.status(400).json({ error: 'Invalid verified credit event' });
+  const order = store.getOrder(orderId);
+  if (!order || order.merchantId !== merchantId) return res.status(404).json({ error: 'Order not found' });
+  if (Math.abs(order.amount - Number(amount)) > 0.001) return res.status(409).json({ error: 'Credit amount does not match order' });
+  if (order.status === 'PAID') {
+    if (order.paymentDetails?.eventId === eventId && order.paymentDetails?.utr === utr)
+      return res.json({ success: true, alreadyProcessed: true, orderId, status: 'PAID' });
+    return res.status(409).json({ error: 'Order already settled by a different event' });
+  }
+  if (order.status !== 'PENDING') return res.status(409).json({ error: 'Order is not pending' });
+  const duplicateUtr = Object.values(store.data.orders).some(o => o.orderId !== orderId && o.status === 'PAID' && o.paymentDetails?.utr === utr);
+  if (duplicateUtr) return res.status(409).json({ error: 'Transaction reference already used' });
+  store.updateOrder(orderId, {
+    status: 'PAID',
+    verifiedAt: new Date().toISOString(),
+    paymentDetails: {
+      utr, txnId: typeof transactionId === 'string' ? transactionId.slice(0, 80) : '',
+      eventId, amount: Number(amount), verificationMethod: 'AUTHENTICATED_VERIFIER_WEBHOOK',
+      timestamp: new Date().toISOString()
+    }
+  });
+  return res.json({ success: true, orderId, status: 'PAID' });
+});
+
 // ==============================================================
 // 4. PUBLIC DEVELOPER API & PAYWALL ENDPOINTS
 // ==============================================================
@@ -423,7 +472,7 @@ app.post('/api/v1/checkout/create', async (req, res) => {
   }
 
   const { amount, customerName, customerEmail, note } = req.body;
-  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || process.env.VERCEL || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
+  if (!merchant.upiId || !merchant.isOnboarded || !process.env.MONGODB_URI || !process.env.VERIFIER_WEBHOOK_SECRET || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Live payments disabled until persistent storage and trusted verification are configured.'});
   const numAmount = Number(amount);
   if (!Number.isFinite(numAmount) || numAmount < 1 || numAmount > 100000 || Math.round(numAmount * 100) / 100 !== numAmount) {
     return res.status(400).json({ error: 'Invalid amount' });
@@ -598,7 +647,7 @@ app.post('/api/v1/checkout/verify-utr', async (req, res) => {
   const order = store.getOrder(orderId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
-  if (process.env.VERCEL || process.env.PAYMENT_VERIFICATION_ENABLED !== 'true') return res.status(503).json({error:'Trusted bank verification worker is not available'});
+  return res.status(403).json({error:'Manual UTR alone is not trusted proof of payment. Await an authenticated bank/PSP event.'});
   if (!/^\d{12}$/.test(String(utr).trim())) return res.status(400).json({error:'A valid 12-digit UTR is required'});
   const merchant = store.getMerchantById(order.merchantId);
   if (!merchant) return res.status(404).json({error:'Merchant not found'});
