@@ -1024,3 +1024,23 @@ body {
 .btn-download-drive:active {
   transform: scale(0.98);
 }
+
+/* Testing link safety: do not imply funds have been verified. */
+.checkout-preview-banner {
+  background: #fff1f2;
+  border: 1px solid #fda4af;
+  color: #9f1239;
+  padding: 13px 15px;
+  border-radius: 13px;
+  margin: 14px 0;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.55;
+}
+.checkout-preview-banner.hidden { display: none; }
+@media (max-width: 620px) {
+  .checkout-preview-banner { font-size: 13px; margin: 10px 0; }
+  .intent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .intent-grid .intent-card { min-width: 0; }
+  .upi-address { word-break: break-all; }
+}
