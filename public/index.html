@@ -58,7 +58,7 @@
       <!-- HERO SECTION -->
       <div class="hero-container">
         <div class="hero-pill">
-          <span class="hero-pill-badge">PRODUCTION READY</span>
+          <span class="hero-pill-badge">TESTING BUILD</span>
           <span>Zero-Fee Peer-to-Peer UPI Payment Gateway</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"/>
@@ -150,7 +150,7 @@
                       <img src="/qr-code.jpeg" alt="Faux QR" class="faux-qr-img">
                     </div>
                     <div class="faux-qr-tag">DOWN PAYMENT • SCAN &amp; PAY</div>
-                    <div class="faux-upi-id">UPI: 8789601387@fam</div>
+                    <div class="faux-upi-id">UPI: yourname@upi</div>
                   </div>
                 </div>
 
@@ -306,12 +306,12 @@
           <form class="auth-form" id="formSignIn">
             <div class="form-group">
               <label class="form-label" for="loginEmail">Email Address</label>
-              <input type="email" id="loginEmail" class="form-control" placeholder="name@business.com" value="huntkum@gmail.com" required>
+              <input type="email" id="loginEmail" class="form-control" placeholder="name@business.com" value="" required>
             </div>
 
             <div class="form-group">
               <label class="form-label" for="loginPass">Password</label>
-              <input type="password" id="loginPass" class="form-control" placeholder="••••••••" value="password123" required>
+              <input type="password" id="loginPass" class="form-control" placeholder="••••••••" value="" required>
             </div>
 
             <button type="submit" class="btn-auth-submit" id="btnSubmitLogin">
@@ -327,7 +327,7 @@
           <form class="auth-form hidden" id="formSignUp">
             <div class="form-group">
               <label class="form-label" for="regName">Full Name</label>
-              <input type="text" id="regName" class="form-control" placeholder="Monu Kumar" required>
+              <input type="text" id="regName" class="form-control" placeholder="Your Business" required>
             </div>
 
             <div class="form-group">
@@ -404,7 +404,7 @@
 
               <div class="form-group">
                 <label class="form-label" for="obUpiId">Settlement UPI ID</label>
-                <input type="text" id="obUpiId" class="form-control font-mono" value="8789601387@fam" placeholder="e.g. 8789601387@fam">
+                <input type="text" id="obUpiId" class="form-control font-mono" value="" placeholder="e.g. yourname@upi">
                 <span class="form-hint">Funds will be deposited directly to this UPI ID.</span>
               </div>
 
@@ -447,7 +447,7 @@
                 <img src="/qr-code.jpeg" alt="Uploaded QR" class="preview-thumb" id="previewQrImg">
                 <div class="detection-info">
                   <span class="detection-badge">✓ QR Successfully Decoded</span>
-                  <div class="detected-id" id="detectedUpiTag">UPI ID: 8789601387@fam</div>
+                  <div class="detected-id" id="detectedUpiTag">UPI ID: yourname@upi</div>
                   <div class="detected-sub">Ready for dynamic amount generation.</div>
                 </div>
               </div>
@@ -522,7 +522,7 @@
                     <div class="step-circle">4</div>
                     <div>
                       <strong>Confirm Gmail Link</strong>
-                      <p>Ensure <code class="font-mono">huntkum@gmail.com</code> is your verified email.</p>
+                      <p>Ensure <code class="font-mono">your-email@gmail.com</code> is your verified email.</p>
                     </div>
                   </div>
                 </div>
@@ -570,7 +570,7 @@
               <div class="form-row">
                 <div class="form-group flex-1">
                   <label class="form-label" for="obGmailUser">Gmail Address</label>
-                  <input type="email" id="obGmailUser" class="form-control" value="huntkum@gmail.com" required>
+                  <input type="email" id="obGmailUser" class="form-control" value="your-email@gmail.com" required>
                 </div>
 
                 <div class="form-group flex-1">
@@ -609,7 +609,7 @@
               <div class="api-key-reveal-box">
                 <div class="api-label">Your Live Merchant API Key</div>
                 <div class="api-key-row">
-                  <span class="api-key-text font-mono" id="obApiKeyDisplay">aura_live_9f82b7c41a58e390d4e</span>
+                  <span class="api-key-text font-mono" id="obApiKeyDisplay">Sign in to generate an API key</span>
                   <button type="button" class="btn-copy-key" id="btnCopyObApiKey">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
