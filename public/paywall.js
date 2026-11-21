@@ -75,10 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await res.json();
       if (!data.success || !data.order) {
-        showToast('Order not found. Generating new dynamic order...');
-        const defaultAmt = isTestRoute ? 1.00 : 199.00;
-        const note = isTestRoute ? 'Payment Gateway Test ₹1.00' : 'Complete Gateway Source Code';
-        setTimeout(() => createNewDynamicOrder(defaultAmt, 'Customer', note, isTestRoute), 1200);
+        showToast(data.error || 'Order not found. Create a payment link from your merchant dashboard.');
         return;
       }
 
@@ -91,8 +88,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       startTimers();
-      setupSSE();
-      startPolling();
+      if (!data.order.previewOnly) {
+        setupSSE();
+        startPolling();
+      } // Demo links never poll or falsely display a successful payment.
     } catch (e) {
       showToast('Could not load checkout order');
     }
@@ -135,21 +134,24 @@ document.addEventListener('DOMContentLoaded', () => {
     merchantLogo.textContent = ((m.businessName || 'Apex')[0] || 'A').toUpperCase();
     amountDisplay.textContent = `₹${parseFloat(o.amount).toFixed(2)}`;
 
-    const isTestOrder = isTestRoute || (o.note && o.note.toLowerCase().includes('test')) || (parseFloat(o.amount) <= 5);
-    if (isTestOrder) {
-      purposeDisplay.textContent = o.note || 'UPI System Test Payment • ₹1 Auto-Verification';
-      const productBadge = document.querySelector('.product-badge span');
-      const productTitleText = document.querySelector('.product-title-text');
-      if (productBadge) productBadge.textContent = '⚡ TEST PAYMENT (₹1)';
-      if (productTitleText) productTitleText.textContent = 'Make a ₹1 payment to test live bank credit auto-verification and success screen';
-      const downPaymentSpan = document.querySelector('.down-payment-label span:last-child');
-      if (downPaymentSpan) downPaymentSpan.textContent = 'SCAN & PAY EXACT ₹1 • INSTANT AUTO-VERIFICATION';
-      if (btnPayAgain) btnPayAgain.textContent = 'Test Again (New ₹1)';
-    } else {
-      purposeDisplay.textContent = o.note || 'Make a payment and get source code of complete payment gateway';
-      if (btnPayAgain) btnPayAgain.textContent = 'Pay Again (New ₹199)';
+    purposeDisplay.textContent = o.note || 'UPI payment request';
+    const productBadge = document.querySelector('.product-badge span');
+    const productTitleText = document.querySelector('.product-title-text');
+    if (productBadge) productBadge.textContent = o.previewOnly ? 'QR + UPI INTENT PREVIEW' : 'UPI CHECKOUT';
+    if (productTitleText) productTitleText.textContent = o.previewOnly
+      ? 'Open your installed UPI app to preview the exact payee and amount. Do not enter your PIN or send money in preview mode.'
+      : 'Pay the exact amount to the merchant UPI ID shown below. Status updates after independent bank confirmation.';
+    const downPaymentSpan = document.querySelector('.down-payment-label span:last-child');
+    if (downPaymentSpan) downPaymentSpan.textContent = 'QR contains this merchant’s UPI ID and the exact amount';
+    const previewBanner = document.getElementById('checkoutPreviewBanner');
+    if (previewBanner) previewBanner.classList.toggle('hidden', !o.previewOnly);
+    if (o.previewOnly) {
+      radarTitle.textContent = 'QR / UPI App Preview — Not Verified';
+      const radarDesc = document.getElementById('radarDesc');
+      if (radarDesc) radarDesc.textContent = 'Bank verification is OFF. Do not send money. Checkout remains PENDING.';
     }
-    
+    if (btnPayAgain) btnPayAgain.textContent = 'Back to Merchant Dashboard';
+
     // Dynamic QR with exact pre-filled amount
     if (o.dynamicQrDataUrl) {
       dynamicQrImg.src = o.dynamicQrDataUrl;
@@ -157,11 +159,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     upiIdDisplay.textContent = m.upiId || '';
 
-    // Show PhonePe intent specifically on test route (/test/new or ₹1 test payments)
+    // Keep app-specific intents visible for every amount, not just small test orders.
     const btnPhonePe = document.getElementById('btnPhonePe');
-    if (btnPhonePe) {
-      btnPhonePe.style.display = isTestOrder ? 'flex' : 'none';
-    }
+    if (btnPhonePe) btnPhonePe.style.display = 'flex';
 
     // 1-Tap Mobile Intent Deep-Links configuration
     if (typeof window.setupUpiIntentLinks === 'function') {
