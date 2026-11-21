@@ -15,11 +15,12 @@ function setupUpiIntentLinks(order) {
   if (!order) return;
 
   const rawUri = order.upiUri || order.dynamicUpiUrl || '';
-  if (!rawUri) return;
+  if (!/^upi:\/\/pay\?pa=[^&]+/.test(rawUri)) return;
 
   // Strip 'upi://pay?' prefix to extract the raw query parameters
   const upiParams = rawUri.replace(/^upi:\/\/pay\??/, '');
   const isAndroid = /Android/i.test(navigator.userAgent || '');
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 
   // 1. Universal / Direct UPI Intent & FamPay
   const btnPayDirect = document.getElementById('btnPayDirect');
@@ -34,7 +35,8 @@ function setupUpiIntentLinks(order) {
   // 2. Google Pay: Uses Google Pay's registered Tez scheme
   const btnGPay = document.getElementById('btnGPay');
   if (btnGPay) {
-    btnGPay.href = `tez://upi/pay?${upiParams}`;
+    // Android Google Pay uses tez://; iOS supports gpay://.
+    btnGPay.href = `${isIOS ? 'gpay' : 'tez'}://upi/pay?${upiParams}`;
   }
 
   // 3. PhonePe: Pure Direct Deep Link (phonepe://) with clean P2P prefilled params (no intent wrapper, no mode/tr)
@@ -45,13 +47,15 @@ function setupUpiIntentLinks(order) {
     const amtMatch = rawUri.match(/am=([^&]+)/);
     const noteMatch = rawUri.match(/tn=([^&]+)/);
 
-    const cleanVpa = vpaMatch ? vpaMatch[1] : '8789601387@fam';
-    const cleanName = nameMatch ? nameMatch[1] : 'Monu%20Kumar';
+    const cleanVpa = vpaMatch ? vpaMatch[1] : '';
+    const cleanName = nameMatch ? nameMatch[1] : 'Merchant';
     const cleanAmt = amtMatch ? amtMatch[1] : Number(order.amount || 1.00).toFixed(2);
     const cleanNote = noteMatch ? noteMatch[1] : 'Payment';
+    if (!cleanVpa) return;
 
     // Direct PhonePe deep link with clean P2P parameters so PhonePe opens directly without rejection
     const phonePeDeepLink = `phonepe://pay?pa=${cleanVpa}&pn=${cleanName}&am=${cleanAmt}&cu=INR&tn=${cleanNote}`;
+    // Preserve the established PhonePe custom scheme that worked in the original.
     btnPhonePe.href = phonePeDeepLink;
     btnPhonePe.onclick = null;
   }
