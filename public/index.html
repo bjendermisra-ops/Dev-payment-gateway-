@@ -11,6 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 </head>
 <body class="light-mode">
+<div role="status" style="position:relative;z-index:9999;background:#7f1d1d;color:#fff;text-align:center;padding:12px 20px;font:600 13px system-ui,sans-serif">TESTING MODE — Real payments are disabled until a permanent database and trusted bank verifier are connected. Do not pay demo QR codes.</div>
   <div class="bg-grid"></div>
   <div class="bg-glow-radial"></div>
 
@@ -532,7 +533,7 @@
               <div class="slide-footer">
                 <button type="button" class="btn-slide-back" onclick="window.nextOnboardingSlide(2)">Back</button>
                 <button type="button" class="btn-slide-next" onclick="window.nextOnboardingSlide(4)">
-                  <span>Continue to Gmail Setup</span>
+                  <span>Continue to Verification Setup</span>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="9 18 15 12 9 6"/>
                   </svg>
@@ -544,8 +545,8 @@
           <!-- SLIDE 4: Google App Password Setup -->
           <div class="carousel-slide" id="slide4">
             <div class="slide-card">
-              <div class="slide-badge">STEP 4 OF 5 • GMAIL CREDENTIALS</div>
-              <h2 class="slide-title">Connect Gmail &amp; 16-Char App Password</h2>
+              <div class="slide-badge">STEP 4 OF 5 • BANK VERIFICATION</div>
+              <h2 class="slide-title">Set Up Trusted Payment Verification</h2>
               <p class="slide-sub">AuraPay securely connects to your Gmail IMAP via Google's sanctioned App Passwords.</p>
 
               <div class="app-pass-guide">
@@ -567,7 +568,7 @@
                 </div>
               </div>
 
-              <div class="form-row">
+              <div class="form-row" style="display:none" aria-hidden="true">
                 <div class="form-group flex-1">
                   <label class="form-label" for="obGmailUser">Gmail Address</label>
                   <input type="email" id="obGmailUser" class="form-control" value="your-email@gmail.com" required>
@@ -575,11 +576,11 @@
 
                 <div class="form-group flex-1">
                   <label class="form-label" for="obGmailPass">16-Letter App Password</label>
-                  <input type="text" id="obGmailPass" class="form-control font-mono" value="onqe fwmv ahiq fopw" placeholder="xxxx xxxx xxxx xxxx" required>
+                  <input type="text" id="obGmailPass" class="form-control font-mono" value="" placeholder="xxxx xxxx xxxx xxxx" required>
                 </div>
               </div>
 
-              <div class="connection-test-row">
+              <div class="connection-test-row" style="display:none" aria-hidden="true">
                 <button type="button" class="btn-test-connection" id="btnTestGmailImap">
                   <span id="testBtnSpinner" class="spinner-sm hidden"></span>
                   <span id="testBtnText">⚡ Test Gmail IMAP Connection Live</span>
@@ -603,11 +604,11 @@
           <div class="carousel-slide" id="slide5">
             <div class="slide-card text-center">
               <div class="celebration-circle">🎉</div>
-              <h2 class="slide-title">Payment Gateway is Ready!</h2>
-              <p class="slide-sub">Your FamPay UPI and Gmail watcher are fully configured. You can now accept payments anywhere.</p>
+              <h2 class="slide-title">Merchant Profile Saved</h2>
+              <p class="slide-sub">Connect a verified bank/PSP provider and permanent database before accepting real money.</p>
 
               <div class="api-key-reveal-box">
-                <div class="api-label">Your Live Merchant API Key</div>
+                <div class="api-label">Your Merchant API Key (Secret)</div>
                 <div class="api-key-row">
                   <span class="api-key-text font-mono" id="obApiKeyDisplay">Sign in to generate an API key</span>
                   <button type="button" class="btn-copy-key" id="btnCopyObApiKey">
