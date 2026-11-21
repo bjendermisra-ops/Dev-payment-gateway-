@@ -25,6 +25,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const purposeDisplay = document.getElementById('purposeDisplay');
   const dynamicQrImg = document.getElementById('dynamicQrImg');
   const upiIdDisplay = document.getElementById('upiIdDisplay');
+  const upiAppHelp = document.getElementById('upiAppHelp');
+  function showIntentFallbackMessage() {
+    if (window.location.hash === '#upi-app-help' && upiAppHelp) {
+      upiAppHelp.textContent = 'PhonePe could not open directly. Use the original PhonePe link above or Pay via Any UPI App. On Android, open this link in Chrome instead of an in-app browser.';
+    }
+  }
+  window.addEventListener('hashchange', showIntentFallbackMessage);
+  showIntentFallbackMessage();
   const copyUpiBtn = document.getElementById('copyUpiBtn');
   const paywallTimer = document.getElementById('paywallTimer');
   const radarTitle = document.getElementById('radarTitle');
@@ -169,6 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       setupUpiDeepLinksFallback(o);
     }
+    // Never navigate through the QR-image/gallery flow on direct app button taps.
+    // Anchors use user-initiated upi://, tez://, phonepe:// or Chrome intent:// links.
+    showIntentFallbackMessage();
   }
 
   function setupUpiDeepLinksFallback(order) {
