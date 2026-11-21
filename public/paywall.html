@@ -23,12 +23,12 @@
         <div class="merchant-badge">
           <div class="merchant-logo-mark" id="merchantLogo">A</div>
           <div>
-            <h2 class="merchant-name" id="merchantNameDisplay">Apex Cloud &amp; Payments</h2>
+            <h2 class="merchant-name" id="merchantNameDisplay">Merchant</h2>
             <div class="verified-merchant-tag">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
-              Verified Merchant
+              Merchant UPI Checkout
             </div>
           </div>
         </div>
@@ -40,6 +40,7 @@
       </div>
 
       <!-- Amount Header -->
+      <div id="checkoutPreviewBanner" class="checkout-preview-banner hidden" role="alert">PREVIEW MODE — Do not authorize a real money transfer. QR and UPI app opening can be tested, but bank confirmation is not connected and this order will remain PENDING.</div>
       <div class="amount-hero">
         <span class="currency-tag">Amount to Pay</span>
         <div class="amount-val" id="amountDisplay">₹0.00</div>
@@ -53,9 +54,9 @@
             <polyline points="16 18 22 12 16 6"></polyline>
             <polyline points="8 6 2 12 8 18"></polyline>
           </svg>
-          <span>Instant Download</span>
+          <span>UPI Checkout</span>
         </div>
-        <p class="product-title-text">Make a payment and get source code of complete payment gateway</p>
+        <p class="product-title-text">A secure UPI payment request for this merchant. Payment confirmation is separate.</p>
       </div>
 
       <!-- Dynamic QR & Scanner Showcase -->
@@ -69,7 +70,7 @@
         <!-- Down payment badge below QR -->
         <div class="down-payment-label">
           <span class="live-pulse"></span>
-          <span>SCAN &amp; PAY EXACT AMOUNT • INSTANT SOURCE CODE ACCESS</span>
+          <span>QR CONTAINS MERCHANT UPI ID &amp; EXACT AMOUNT</span>
         </div>
       </div>
 
@@ -89,7 +90,11 @@
 
         <!-- App-Specific Dedicated Deep-Links -->
         <div class="intent-grid">
-          <a id="btnPhonePe" class="intent-card app-phonepe" href="#" style="display: none;">
+          <a id="btnGPay" class="intent-card app-gpay" href="#">
+            <div class="intent-icon-wrap" style="background:#ffffff;color:#4285f4;border:1px solid #dae3f1;"><span class="intent-app-initial">G</span></div>
+            <span class="intent-app-name">Google Pay</span>
+          </a>
+          <a id="btnPhonePe" class="intent-card app-phonepe" href="#">
             <div class="intent-icon-wrap" style="background: #5f259f;">
               <span class="intent-app-initial">P</span>
             </div>
@@ -151,13 +156,13 @@
         </div>
         <div class="radar-info">
           <div class="radar-title" id="radarTitle">Auto-verifying payment in real time...</div>
-          <div class="radar-desc" id="radarDesc">Listening to bank email notifications. No page reload required.</div>
+          <div class="radar-desc" id="radarDesc">Awaiting trusted bank or PSP confirmation. Payment screenshots or typed UTRs cannot verify a credit.</div>
         </div>
         <div class="session-timer font-mono" id="paywallTimer">04:59</div>
       </div>
 
       <!-- Manual UTR Fallback -->
-      <div class="utr-accordion">
+      <div class="utr-accordion" style="display:none;" aria-hidden="true">
         <div class="utr-toggle" id="utrToggle">
           <span>Paid already? Enter UTR / Ref Number manually</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -177,7 +182,7 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        <span>End-to-End Encrypted Peer-to-Peer UPI Settlement</span>
+        <span>UPI transfer requests are handled by your chosen UPI app. Payment must be confirmed separately.</span>
       </div>
 
     </div>
