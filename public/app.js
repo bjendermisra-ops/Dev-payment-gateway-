@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentMerchant = null;
   let activeOnboardingStep = 1;
   let uploadedQrPath = '/uploads/default-qr.jpeg';
-  let decodedUpiId = '8789601387@fam';
+  let decodedUpiId = '';
   let merchantSse = null;
 
   // Views
@@ -143,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Open Test Paywall
     btnHeroDemoCheckout.addEventListener('click', async () => {
+      if (!currentMerchant) { setAuthTab('signup'); showView('auth'); showToast('Sign in to create a payment link.'); return; }
       try {
         const res = await fetch('/api/merchant/create-paywall-link', {
           method: 'POST',
@@ -222,9 +223,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1-Click Quick Demo Login
     btnQuickDemoLogin.addEventListener('click', () => {
-      loginEmail.value = 'huntkum@gmail.com';
-      loginPass.value = 'password123';
-      formSignIn.dispatchEvent(new Event('submit'));
+      setAuthTab('signup');
+      showToast('Create your own account; shared demo passwords are disabled.');
     });
 
     // Sign In Submit
@@ -312,25 +312,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadSavedSession() {
-    const saved = localStorage.getItem('aurapay_merchant');
-    if (saved) {
-      try {
-        currentMerchant = JSON.parse(saved);
+    // Confirm every restored merchant session with the server.
+    try {
+      const response = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      if (!response.ok) {
+        localStorage.removeItem('aurapay_merchant');
+        currentMerchant = null;
         updateNavState();
-        if (currentMerchant.isOnboarded) {
-          loadDashboardData();
-        }
-      } catch (e) {}
-    } else {
-      // Load default demo merchant
-      try {
-        const res = await fetch('/api/auth/me');
-        const data = await res.json();
-        if (data.success && data.merchant) {
-          currentMerchant = data.merchant;
-          updateNavState();
-        }
-      } catch (e) {}
+        return;
+      }
+      const data = await response.json();
+      if (data.success && data.merchant) {
+        currentMerchant = data.merchant;
+        updateNavState();
+        if (currentMerchant.isOnboarded) loadDashboardData();
+      }
+    } catch (err) {
+      localStorage.removeItem('aurapay_merchant');
     }
   }
 
@@ -493,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       {
         title: 'Verify Linked Gmail',
-        desc: 'Ensure huntkum@gmail.com is listed as your primary notification address.',
+        desc: 'Ensure your verified email receives genuine bank credit alerts.',
         color: '#0F172A'
       }
     ];
@@ -564,7 +562,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    btnDashLogout.addEventListener('click', () => {
+    btnDashLogout.addEventListener('click', async () => {
+      try { await fetch('/api/auth/logout', { method: 'POST' }); } catch(e) {}
       localStorage.removeItem('aurapay_merchant');
       currentMerchant = null;
       updateNavState();
@@ -575,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCopyDashKey.addEventListener('click', () => {
       const key = dashApiKeyDisplay.textContent;
       navigator.clipboard.writeText(key).then(() => {
-        showToast('API Key copied: ' + key);
+        showToast('API Key copied. Keep it private.');
       });
     });
 
@@ -665,8 +664,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const d1 = await r1.json();
         const d2 = await r2.json();
 
+        if (!r1.ok || !r2.ok || !d1.simulatedPayment || !d2.simulatedPayment) throw new Error('Simulation disabled');
         simFeedback.innerHTML = `
-          <strong>✓ Concurrency Engine Verified:</strong><br>
+          <strong>✓ Demo simulation complete (not a bank payment):</strong><br>
           • User A: ₹${d1.simulatedPayment.amount} (UTR ${d1.simulatedPayment.utr}) processed independently.<br>
           • User B: ₹${d2.simulatedPayment.amount} (UTR ${d2.simulatedPayment.utr}) processed independently.<br>
           Zero collision detected.
@@ -674,7 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         loadDashboardData();
       } catch (err) {
-        simFeedback.textContent = 'Simulation failed.';
+        simFeedback.textContent = 'Simulation is disabled on public deployments.';
       } finally {
         btnSimulateConcurrent.disabled = false;
         btnSimulateConcurrent.textContent = 'Run Concurrent Payment Test (2 Users)';
@@ -701,7 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderOrdersTable(data.recentOrders);
         renderCodeSnippet('curl');
-        connectDashboardSSE(currentMerchant.id);
+        // Serverless deployments do not hold long-lived IMAP/SSE connections.
       }
     } catch (e) {
       console.warn('Dashboard load error:', e);
