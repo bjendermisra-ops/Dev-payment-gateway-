@@ -1,3 +1,5 @@
+> **Current integration status (2026-11-21):** This is a testing deployment, NOT a verified production payment gateway. Database provisioning and a trusted bank/PSP credit-confirmation source are required before enabling payments. [Hindi free MongoDB setup](MONGODB_FREE_SETUP_HI.md). Never use a third-party demo QR for real transfers.
+
 > **IMPORTANT — CURRENT STATUS (November 2026): TESTING BUILD ONLY.** This open-source project is **not yet safe for real money**. The original README below describes intended capabilities, not verified production readiness. Live UPI checkout is disabled on Vercel. Set up MongoDB, a persistent backend, and a trusted bank/PSP payment verifier before accepting funds. See [deployment and website integration guide](DEPLOYMENT_AND_INTEGRATION.md).
 
 <div align="center">
