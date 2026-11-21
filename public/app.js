@@ -347,7 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==============================================================
   function setupOnboarding() {
     const btnSaveUpiFast = document.getElementById('btnSaveUpiFast');
-    if (btnSaveUpiFast) btnSaveUpiFast.addEventListener('click', window.finishOnboarding);
+    if (btnSaveUpiFast) btnSaveUpiFast.addEventListener('click', () => window.finishOnboarding());
     // Dropzone Click
     qrDropzone.addEventListener('click', () => qrFileInput.click());
     btnSelectQrFile.addEventListener('click', (e) => {
