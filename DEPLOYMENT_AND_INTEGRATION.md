@@ -10,7 +10,7 @@
 
 ### Important: never send live payments to the current Vercel demo
 
-Vercel's serverless process cannot guarantee a long-lived Gmail IMAP connection or shared writable local storage. Live order creation on Vercel is intentionally blocked even if a verification flag is set. QR images inherited from a third-party demo must NOT be paid; public landing-page imagery uses a non-scannable DEMO placeholder.
+Vercel's serverless process cannot guarantee a long-lived Gmail IMAP connection or shared writable local storage. Live order creation is disabled by default. It can only be enabled with persistent MongoDB storage, `PAYMENT_VERIFICATION_ENABLED=true`, and an authenticated verifier secret. A real bank/PSP must then deliver verified settlement events; setting variables alone does NOT establish real verification. QR images inherited from a third-party demo must NOT be paid; public landing-page imagery uses a non-scannable DEMO placeholder.
 
 The original code's bank-email parser has NOT been certified to authenticate bank transactions. Email screenshots, UTR text, and sender-provided notes are not proof of receipt. Only an authoritative, authenticated provider feed or independently reconciled bank credits should be allowed to change a real order to `PAID`.
 
@@ -80,3 +80,35 @@ A successful response (once a trusted backend is configured) includes `checkoutU
 - Perform independent security review and real integration tests before accepting funds.
 
 **No claim of 100% payment success is made.** Compilation and HTTP smoke tests do not validate money settlement or banking compliance.
+
+## Trusted bank/PSP webhook adapter
+
+The gateway now supports `POST /api/internal/verified-payment` for **independently verified real bank credits**. This is an *adapter*, not an actual bank integration. Bank-provider credentials, onboarding, and external verification must be established separately. Never send unsigned customer claims to this endpoint.
+
+Set a strong random `VERIFIER_WEBHOOK_SECRET` in the server's secret environment (not client code) and enable `PAYMENT_VERIFICATION_ENABLED=true` only once your approved provider's server is ready. After the provider independently confirms an actual credit, its trusted server signs the **exact JSON bytes** using HMAC SHA-256:
+
+```text
+X-AuraPay-Timestamp: <current Unix epoch seconds>
+X-AuraPay-Signature: sha256=<hex(HMAC_SHA256(secret, timestamp + "." + rawBody))>
+Content-Type: application/json
+```
+
+Event body:
+
+```json
+{
+  "eventId": "bank-event-unique-001",
+  "status": "CREDIT_CONFIRMED",
+  "orderId": "PAY-00000000-0000-4000-8000-000000000000",
+  "merchantId": "merch_actual_merchant_id",
+  "amount": 100,
+  "utr": "123456789012",
+  "transactionId": "BANK_TXN_REFERENCE"
+}
+```
+
+The handler validates signature and timestamp freshness (5-minute window), merchant ownership, exact amount, 12-digit UTR, duplicate references, and payment status. If it succeeds, `GET /api/v1/checkout/status/:orderId` returns `verified:true`.
+
+**Important:** A valid HMAC proves that a holder of the webhook secret submitted the event. It does **not** independently prove a banking transaction. Only an approved provider with authoritative settlement access should hold the secret. Configure provider-level replay protection, deduplication, durable event logs and bank reconciliation before handling customer money.
+
+The legacy Gmail/IMAP parsing and manual customer-entered UTR pathways are not accepted as authoritative payment confirmation in this build.
