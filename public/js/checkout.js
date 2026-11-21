@@ -21,6 +21,13 @@ function setupUpiIntentLinks(order) {
   const upiParams = rawUri.replace(/^upi:\/\/pay\??/, '');
   const isAndroid = /Android/i.test(navigator.userAgent || '');
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  // Chromium can target a specific installed Android app via a user-initiated
+  // intent:// click. Keep the original custom scheme as an alternative.
+  const ua = navigator.userAgent || '';
+  const supportsAndroidIntent = isAndroid && /Chrome\//i.test(ua) && !/; wv\)|Version\/4\.0/i.test(ua);
+  const fallbackCheckout = typeof window !== 'undefined' && window.location
+    ? window.location.href.split('#')[0] + '#upi-app-help'
+    : '';
 
   // 1. Universal / Direct UPI Intent & FamPay
   const btnPayDirect = document.getElementById('btnPayDirect');
@@ -56,7 +63,17 @@ function setupUpiIntentLinks(order) {
     // Direct PhonePe deep link with clean P2P parameters so PhonePe opens directly without rejection
     const phonePeDeepLink = `phonepe://pay?pa=${cleanVpa}&pn=${cleanName}&am=${cleanAmt}&cu=INR&tn=${cleanNote}`;
     // Preserve the established PhonePe custom scheme that worked in the original.
-    btnPhonePe.href = phonePeDeepLink;
+    // Original upstream repo uses phonepe://pay; retain that exact route.
+    // Android Chrome users get a direct ACTION_VIEW UPI intent targeted to
+    // PhonePe rather than being sent through the QR/gallery upload flow.
+    const originalLink = document.getElementById('btnPhonePeOriginal');
+    if (originalLink) originalLink.href = phonePeDeepLink;
+    const intent = 'intent://pay?pa=' + cleanVpa + '&pn=' + cleanName +
+      '&am=' + cleanAmt + '&cu=INR&tn=' + cleanNote +
+      '#Intent;scheme=upi;package=com.phonepe.app;' +
+      (fallbackCheckout ? 'S.browser_fallback_url=' + encodeURIComponent(fallbackCheckout) + ';' : '') +
+      'end';
+    btnPhonePe.href = supportsAndroidIntent ? intent : phonePeDeepLink;
     btnPhonePe.onclick = null;
   }
 
