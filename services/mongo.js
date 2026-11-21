@@ -38,6 +38,9 @@ const OrderSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// Prevent a single bank UTR from settling multiple orders.
+OrderSchema.index({ 'paymentDetails.utr': 1 }, { unique: true, partialFilterExpression: { 'paymentDetails.utr': { $type: 'string' } } });
+
 const MerchantModel = mongoose.model('Merchant', MerchantSchema);
 const OrderModel = mongoose.model('Order', OrderSchema);
 
